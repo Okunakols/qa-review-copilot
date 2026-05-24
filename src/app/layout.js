@@ -2,7 +2,7 @@ import './globals.css';
 
 export const metadata = {
   title: 'DocuReview AI',
-  description: 'QA document review platform for medical device industry.',
+  description: 'QA document review platform',
 };
 
 export default function RootLayout({ children }) {

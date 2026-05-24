@@ -1,5 +1,3 @@
-// Utility helpers: formatting, export, report builder
-
 export function fmtBytes(b) {
   if (b < 1024) return b + ' B';
   if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
@@ -7,11 +5,7 @@ export function fmtBytes(b) {
 }
 
 export function fmtDate(iso) {
-  try {
-    return new Date(iso).toLocaleDateString('en-GB');
-  } catch {
-    return '';
-  }
+  try { return new Date(iso).toLocaleDateString('en-GB'); } catch { return ''; }
 }
 
 export function escHtml(s) {
@@ -21,14 +15,6 @@ export function escHtml(s) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
-}
-
-export function escJs(s) {
-  return String(s || '')
-    .replace(/\\/g, '\\\\')
-    .replace(/'/g, "\\'")
-    .replace(/\n/g, '\\n')
-    .replace(/\r/g, '');
 }
 
 export function buildReportText(result, findings, dispositions, cfg, meta, sel, mainFile) {
@@ -64,9 +50,7 @@ export function buildReportText(result, findings, dispositions, cfg, meta, sel, 
 
   findings.forEach(f => {
     const disp = dispositions[f.id];
-    lines.push(
-      `${f.id} [${f.severity}] [${f.type}]${f.category ? ' (' + f.category + ')' : ''}${disp?.status ? ' [' + disp.status.toUpperCase() + ']' : ''}`
-    );
+    lines.push(`${f.id} [${f.severity}] [${f.type}]${disp?.status ? ' [' + disp.status.toUpperCase() + ']' : ''}`);
     lines.push(`Location  : ${f.location || f.paragraphSnippet || '\u2014'}`);
     lines.push(`Issue     : ${f.issue}`);
     if (f.auditRisk) lines.push(`Audit Risk: ${f.auditRisk}`);
@@ -79,59 +63,21 @@ export function buildReportText(result, findings, dispositions, cfg, meta, sel, 
     lines.push('\u2500'.repeat(40));
   });
 
-  lines.push('');
-  lines.push('END OF REPORT');
+  lines.push('', 'END OF REPORT');
   return lines.join('\n');
 }
 
 export function buildCSV(findings, dispositions) {
-  const rows = [
-    [
-      'ID',
-      'Severity',
-      'Type',
-      'Category',
-      'Location',
-      'Issue',
-      'Audit Risk',
-      'Regulatory Ref',
-      'Source Ref',
-      'Confidence',
-      'Comment',
-      'Suggested Fix',
-      'Disposition',
-      'Note',
-    ],
-  ];
+  const rows = [['ID','Severity','Type','Category','Location','Issue','Audit Risk','Regulatory Ref','Source Ref','Confidence','Comment','Suggested Fix','Disposition','Note']];
   findings.forEach(f => {
     const d = dispositions[f.id] || {};
-    rows.push(
-      [
-        f.id,
-        f.severity,
-        f.type,
-        f.category || '',
-        f.location || '',
-        f.issue,
-        f.auditRisk || '',
-        f.regulatoryRef || '',
-        f.sourceRef || '',
-        f.confidence != null ? f.confidence : '',
-        f.comment,
-        f.suggestedFix || '',
-        d.status || '',
-        d.note || '',
-      ].map(v => '"' + (v || '').replace(/"/g, '""') + '"')
-    );
+    rows.push([f.id, f.severity, f.type, f.category || '', f.location || '', f.issue, f.auditRisk || '', f.regulatoryRef || '', f.sourceRef || '', f.confidence != null ? f.confidence : '', f.comment, f.suggestedFix || '', d.status || '', d.note || ''].map(v => '"' + (v || '').replace(/"/g, '""') + '"'));
   });
   return rows.map(r => r.join(',')).join('\n');
 }
 
 export function downloadBlob(content, filename, mimeType) {
-  const blob =
-    content instanceof Blob
-      ? content
-      : new Blob([content], { type: mimeType });
+  const blob = content instanceof Blob ? content : new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
