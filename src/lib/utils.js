@@ -139,6 +139,3 @@ export function downloadBlob(content, filename, mimeType) {
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
-
-
-export { fmtBytes }
