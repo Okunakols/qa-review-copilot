@@ -1,9 +1,8 @@
 import './globals.css';
 
 export const metadata = {
-  title: 'DocuReview AI \u2014 Intelligent QA Document Review',
-  description:
-    'Purpose-built QA document review platform for medical device industry. ISO 13485, EU MDR, FDA 21 CFR Part 820.',
+  title: 'DocuReview AI',
+  description: 'QA document review platform for medical device industry.',
 };
 
 export default function RootLayout({ children }) {
@@ -16,26 +15,7 @@ export default function RootLayout({ children }) {
           rel="stylesheet"
         />
       </head>
-      <body>
-        {children}
-        <script
-          src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.8.0/mammoth.browser.min.js"
-          defer
-        />
-        <script
-          src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"
-          defer
-        />
-        <script
-          src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"
-          defer
-        />
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `if(typeof pdfjsLib!=='undefined')pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';`,
-          }}
-        />
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

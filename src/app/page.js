@@ -14,6 +14,21 @@ import { readFileText } from '../lib/fileReader';
 import { fmtBytes } from '../lib/utils';
 import { ANALYSIS_STEPS, RISK_MAP, READINESS_MAP } from '../lib/constants';
 
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    if (document.querySelector('script[src="' + src + '"]')) {
+      resolve();
+      return;
+    }
+    const s = document.createElement('script');
+    s.src = src;
+    s.defer = true;
+    s.onload = resolve;
+    s.onerror = reject;
+    document.body.appendChild(s);
+  });
+}
+
 export default function Home() {
   const r = useReview();
   const {
@@ -61,6 +76,24 @@ export default function Home() {
   const [srcError, setSrcError] = useState('');
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [apiKeySaved, setApiKeySaved] = useState(false);
+  const [libsReady, setLibsReady] = useState(false);
+
+  // Load CDN libraries dynamically after mount
+  useEffect(() => {
+    Promise.all([
+      loadScript('https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.8.0/mammoth.browser.min.js'),
+      loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'),
+      loadScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js'),
+    ])
+      .then(() => {
+        if (window.pdfjsLib) {
+          window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+            'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        }
+        setLibsReady(true);
+      })
+      .catch(() => setLibsReady(true)); // still render even if libs fail
+  }, []);
 
   // Track API key state
   useEffect(() => {
@@ -129,7 +162,6 @@ export default function Home() {
     }
   }, [srcModalFile, srcModalName, addSource]);
 
-  // Risk and readiness from current result
   const riskBadge = currentResult
     ? RISK_MAP[currentResult.overallRisk] || ['rb-M', '\u2014']
     : null;
@@ -147,9 +179,14 @@ export default function Home() {
     ofi: findings.filter(f => f.severity === 'OFI').length,
   };
 
-  // Don't render until client-side hydration is complete
+  // Wait for mount to avoid hydration mismatch
   if (!mounted) {
-    return null;
+    return (
+      <div style={{ padding: 40, fontFamily: 'system-ui', color: '#333' }}>
+        <h1>DocuReview AI</h1>
+        <p>Loading...</p>
+      </div>
+    );
   }
 
   return (
@@ -242,8 +279,7 @@ export default function Home() {
               <div className="ak-body">
                 <div className="ak-title">AI Engine API Key</div>
                 <div className="ak-sub">
-                  Enter your API key. Stored in session memory only &mdash;
-                  never transmitted or logged.
+                  Enter your API key. Stored in session memory only.
                 </div>
                 <div className="ak-row">
                   <input
@@ -297,11 +333,9 @@ export default function Home() {
           {/* Drop zone */}
           <div className="dropcard">
             <div className="dropcard-h">
-              <div
-                className={`dch-dot ${mainFile ? 'active' : ''}`}
-              />
+              <div className={`dch-dot ${mainFile ? 'active' : ''}`} />
               <span className="dch-title">Primary Document</span>
-              <span className="dch-sub">.docx &middot; .pdf &middot; .txt &middot; max 10MB</span>
+              <span className="dch-sub">.docx / .pdf / .txt / max 10MB</span>
             </div>
             <div
               className={`dz ${mainFile ? 'has' : ''}`}
@@ -313,12 +347,8 @@ export default function Home() {
               {!mainFile ? (
                 <div>
                   <span className="dz-icon">&#128228;</span>
-                  <div className="dz-title">
-                    Drop document here or click to browse
-                  </div>
-                  <div className="dz-sub">
-                    Supports Word, PDF (text-based), and plain text
-                  </div>
+                  <div className="dz-title">Drop document here or click to browse</div>
+                  <div className="dz-sub">Supports Word, PDF (text-based), and plain text</div>
                 </div>
               ) : (
                 <div>
@@ -348,19 +378,8 @@ export default function Home() {
 
           {/* Review config */}
           <div className="config-card">
-            <div
-              style={{
-                padding: '11px 14px',
-                borderBottom: '1px solid var(--fog)',
-              }}
-            >
-              <span
-                style={{
-                  fontSize: 11,
-                  fontWeight: 600,
-                  color: 'var(--ink3)',
-                }}
-              >
+            <div style={{ padding: '11px 14px', borderBottom: '1px solid var(--fog)' }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink3)' }}>
                 Review Configuration
               </span>
             </div>
@@ -447,24 +466,13 @@ export default function Home() {
           {/* Status / loading */}
           {isReviewing && (
             <div className="status-card">
-              <div
-                style={{
-                  fontSize: 11,
-                  fontWeight: 600,
-                  color: 'var(--ink3)',
-                  marginBottom: 10,
-                }}
-              >
+              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink3)', marginBottom: 10 }}>
                 Analysis in progress...
               </div>
               <div className="status-steps">
                 {ANALYSIS_STEPS.map((s, i) => {
-                  const activeIdx = ANALYSIS_STEPS.findIndex(
-                    x => x.id === activeStep
-                  );
-                  const sIdx = ANALYSIS_STEPS.findIndex(
-                    x => x.id === s.id
-                  );
+                  const activeIdx = ANALYSIS_STEPS.findIndex(x => x.id === activeStep);
+                  const sIdx = ANALYSIS_STEPS.findIndex(x => x.id === s.id);
                   let cls = '';
                   let icon = String(i + 1);
                   if (activeIdx >= 0 && sIdx < activeIdx) {
@@ -495,10 +503,8 @@ export default function Home() {
               Start AI Review
             </button>
             <div className="privacy">
-              Documents are not stored on any server. Content is
-              processed by AI engine for analysis only. Output:{' '}
-              <strong>FileName_reviewed.docx</strong> &mdash; original
-              untouched, comments injected into copy.
+              Documents are not stored on any server. Content is processed by AI engine for analysis only.
+              Output: <strong>FileName_reviewed.docx</strong>
             </div>
           </div>
 
@@ -510,9 +516,7 @@ export default function Home() {
                   <div>
                     <div className="ss-title">Review Complete</div>
                     <div className="ss-id">
-                      {revId} &middot;{' '}
-                      {new Date().toLocaleString('en-GB')} &middot;{' '}
-                      {mainFile?.name}
+                      {revId} &middot; {new Date().toLocaleString('en-GB')} &middot; {mainFile?.name}
                     </div>
                   </div>
                   <div className="ss-badges">
@@ -523,11 +527,9 @@ export default function Home() {
                     )}
                     {readinessStr && (() => {
                       const parts = readinessStr.split(' ');
-                      const cls = parts[0];
-                      const lbl = parts.slice(1).join(' ');
                       return (
-                        <span className={`ready-badge ${cls}`}>
-                          {lbl}
+                        <span className={`ready-badge ${parts[0]}`}>
+                          {parts.slice(1).join(' ')}
                         </span>
                       );
                     })()}
@@ -537,34 +539,13 @@ export default function Home() {
               </div>
 
               <div className="stats-row">
-                <div className="stat">
-                  <div className="stat-v sv0">{stats.total}</div>
-                  <div className="stat-l">Total</div>
-                </div>
-                <div className="stat">
-                  <div className="stat-v sv1">{stats.critical}</div>
-                  <div className="stat-l">Critical</div>
-                </div>
-                <div className="stat">
-                  <div className="stat-v sv2h">{stats.high}</div>
-                  <div className="stat-l">High</div>
-                </div>
-                <div className="stat">
-                  <div className="stat-v sv2">{stats.medium}</div>
-                  <div className="stat-l">Medium</div>
-                </div>
-                <div className="stat">
-                  <div className="stat-v sv3">{stats.low}</div>
-                  <div className="stat-l">Low</div>
-                </div>
-                <div className="stat">
-                  <div className="stat-v sv4">{stats.observation}</div>
-                  <div className="stat-l">Obs.</div>
-                </div>
-                <div className="stat">
-                  <div className="stat-v sv5">{stats.ofi}</div>
-                  <div className="stat-l">OFI</div>
-                </div>
+                <div className="stat"><div className="stat-v sv0">{stats.total}</div><div className="stat-l">Total</div></div>
+                <div className="stat"><div className="stat-v sv1">{stats.critical}</div><div className="stat-l">Critical</div></div>
+                <div className="stat"><div className="stat-v sv2h">{stats.high}</div><div className="stat-l">High</div></div>
+                <div className="stat"><div className="stat-v sv2">{stats.medium}</div><div className="stat-l">Medium</div></div>
+                <div className="stat"><div className="stat-v sv3">{stats.low}</div><div className="stat-l">Low</div></div>
+                <div className="stat"><div className="stat-v sv4">{stats.observation}</div><div className="stat-l">Obs.</div></div>
+                <div className="stat"><div className="stat-v sv5">{stats.ofi}</div><div className="stat-l">OFI</div></div>
               </div>
 
               {reviewedBlob && (
@@ -572,12 +553,10 @@ export default function Home() {
                   <div className="dl-ico">&#128196;</div>
                   <div className="dl-info">
                     <div className="dl-title">
-                      {outName} ready &mdash; {findings.length} comments
-                      injected
+                      {outName} ready &mdash; {findings.length} comments injected
                     </div>
                     <div className="dl-sub">
-                      All findings injected as Word Comments. Track Changes
-                      applied where applicable.
+                      All findings injected as Word Comments. Track Changes applied where applicable.
                     </div>
                   </div>
                   <button className="btn-dl" onClick={downloadDocx}>
