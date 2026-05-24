@@ -1,0 +1,1314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>DocuReview AI — Intelligent QA Document Review</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.8.0/mammoth.browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+:root{
+  --ink:#0a0e1a;--ink2:#1e2435;--ink3:#2e3650;
+  --mist:#6b7594;--mist2:#8892aa;--mist3:#b4bdd0;
+  --fog:#e8ecf4;--fog2:#f2f4f9;--fog3:#f9fafc;--white:#ffffff;
+  --brand:#1a56db;--brand-mid:#1e4fc2;--brand-dark:#163da8;
+  --brand-tint:rgba(26,86,219,.07);--brand-glow:rgba(26,86,219,.18);
+  --red:#c0392b;--red-tint:rgba(192,57,43,.07);--red-line:rgba(192,57,43,.2);
+  --amber:#b45309;--amber-tint:rgba(180,83,9,.07);--amber-line:rgba(180,83,9,.2);
+  --gold:#92700a;--gold-tint:rgba(146,112,10,.06);--gold-line:rgba(146,112,10,.2);
+  --emerald:#166534;--emerald-tint:rgba(22,101,52,.07);--emerald-line:rgba(22,101,52,.2);
+  --sapphire:#1d4ed8;--sapphire-tint:rgba(29,78,216,.07);--sapphire-line:rgba(29,78,216,.2);
+  --violet:#5b21b6;--violet-tint:rgba(91,33,182,.07);--violet-line:rgba(91,33,182,.2);
+  --teal:#0f766e;--teal-tint:rgba(15,118,110,.07);
+  --r:5px;--rl:8px;--rxl:12px;
+  font-family:'DM Sans',system-ui,sans-serif;
+  font-size:13px;color:var(--ink);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--fog3);min-height:100vh;display:flex;flex-direction:column;-webkit-font-smoothing:antialiased}
+
+/* ── CHROME ─────────────────────────────────────────────────────────────── */
+.chrome{height:52px;background:var(--ink);display:flex;align-items:center;padding:0 20px;gap:16px;flex-shrink:0;position:sticky;top:0;z-index:100}
+.wordmark{display:flex;align-items:center;gap:10px}
+.wm-icon{width:28px;height:28px;background:var(--brand);border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.wm-icon svg{width:15px;height:15px;fill:#fff}
+.wm-name{font-size:14px;font-weight:600;color:#fff;letter-spacing:-.02em}
+.wm-badge{font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--brand);background:rgba(26,86,219,.2);padding:2px 7px;border-radius:3px;border:1px solid rgba(26,86,219,.35)}
+.chrome-mid{flex:1;display:flex;align-items:center;justify-content:center}
+.review-id{font-size:11px;color:rgba(255,255,255,.35);font-family:'DM Mono',monospace;letter-spacing:.03em}
+.review-id span{color:rgba(255,255,255,.6);margin-left:6px}
+.chrome-r{display:flex;align-items:center;gap:8px}
+.chrome-user{font-size:12px;color:rgba(255,255,255,.55);display:flex;align-items:center;gap:7px}
+.avatar{width:26px;height:26px;border-radius:50%;background:var(--brand-mid);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0}
+.ghost-btn{font-size:11px;padding:5px 11px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:var(--r);color:rgba(255,255,255,.65);cursor:pointer;transition:all .12s;font-family:inherit}
+.ghost-btn:hover{background:rgba(255,255,255,.12);color:#fff}
+
+/* ── LAYOUT ─────────────────────────────────────────────────────────────── */
+.workspace{display:grid;grid-template-columns:256px 1fr 340px;flex:1;min-height:0;overflow:hidden}
+
+/* ── SIDEBAR ─────────────────────────────────────────────────────────────── */
+.sidebar{background:var(--white);border-right:1px solid var(--fog);display:flex;flex-direction:column;overflow:hidden}
+.sb-head{padding:14px 14px 8px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.sb-title{font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--mist)}
+.sb-add{font-size:11px;color:var(--brand);background:none;border:none;cursor:pointer;font-weight:600;font-family:inherit}
+.sb-add:hover{text-decoration:underline}
+.src-scroll{flex:1;overflow-y:auto;padding:4px 8px}
+.src-item{display:flex;align-items:flex-start;gap:8px;padding:8px 8px;border-radius:var(--r);margin-bottom:2px;transition:background .1s}
+.src-item:hover{background:var(--fog2)}
+.src-cb{width:13px;height:13px;margin-top:1px;flex-shrink:0;cursor:pointer;accent-color:var(--brand)}
+.src-info{flex:1;min-width:0}
+.src-name{font-size:12px;font-weight:500;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.src-meta{font-size:10px;color:var(--mist2);margin-top:1px}
+.src-del{font-size:14px;color:var(--mist3);background:none;border:none;cursor:pointer;flex-shrink:0;line-height:1;opacity:0;transition:opacity .1s}
+.src-item:hover .src-del{opacity:1}
+.src-del:hover{color:var(--red)}
+.src-empty{padding:20px 14px;text-align:center;font-size:11px;color:var(--mist2);line-height:1.7}
+.src-empty-icon{font-size:24px;display:block;margin-bottom:8px;opacity:.4}
+.add-src-btn{margin:6px 8px 8px;padding:9px;border:1.5px dashed var(--fog);border-radius:var(--r);background:none;color:var(--mist2);font-size:11px;font-weight:500;cursor:pointer;width:calc(100% - 16px);text-align:center;font-family:inherit;transition:all .12s;display:flex;align-items:center;justify-content:center;gap:5px}
+.add-src-btn:hover{border-color:var(--brand);color:var(--brand);background:var(--brand-tint)}
+.sb-hint{padding:10px 12px;font-size:10px;color:var(--mist2);line-height:1.65;border-top:1px solid var(--fog);flex-shrink:0}
+
+/* ── MAIN ─────────────────────────────────────────────────────────────── */
+.main{overflow-y:auto;padding:20px 24px;display:flex;flex-direction:column;gap:14px}
+
+/* Header metadata bar */
+.meta-bar{background:var(--white);border:1px solid var(--fog);border-radius:var(--rl);padding:12px 16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.meta-field{display:flex;flex-direction:column;gap:3px;flex:1;min-width:120px}
+.meta-lbl{font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--mist2)}
+.meta-inp{font-size:12px;background:none;border:none;color:var(--ink2);outline:none;font-family:inherit;padding:0;width:100%}
+.meta-inp::placeholder{color:var(--mist3)}
+.meta-divider{width:1px;height:32px;background:var(--fog);flex-shrink:0}
+
+/* API Key */
+.ak-strip{background:linear-gradient(135deg,#0a0e1a,#162040);border-radius:var(--rl);padding:14px 16px;display:flex;align-items:center;gap:12px}
+.ak-strip.ok{background:linear-gradient(135deg,#052e16,#0d4a25)}
+.ak-ico{width:32px;height:32px;border-radius:7px;background:rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.ak-body{flex:1}
+.ak-title{font-size:12px;font-weight:600;color:#fff;margin-bottom:2px}
+.ak-sub{font-size:10px;color:rgba(255,255,255,.45)}
+.ak-row{display:flex;gap:7px;margin-top:8px}
+.ak-inp{flex:1;font-size:11px;padding:7px 10px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:var(--r);color:#fff;font-family:'DM Mono',monospace;outline:none}
+.ak-inp::placeholder{color:rgba(255,255,255,.3)}
+.ak-inp:focus{border-color:var(--brand);background:rgba(255,255,255,.1)}
+.ak-save{padding:7px 14px;background:var(--brand);color:#fff;border:none;border-radius:var(--r);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap}
+.ak-save:hover{background:var(--brand-mid)}
+.ak-ok-row{display:flex;align-items:center;gap:8px}
+.ak-ok-dot{width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 6px #22c55e}
+.ak-ok-txt{font-size:12px;color:#86efac;font-weight:500}
+.ak-chg{font-size:10px;color:rgba(255,255,255,.4);cursor:pointer;margin-left:auto}
+.ak-chg:hover{color:rgba(255,255,255,.7)}
+
+/* Drop zone */
+.dropcard{background:var(--white);border:1px solid var(--fog);border-radius:var(--rl)}
+.dropcard-h{padding:11px 16px;border-bottom:1px solid var(--fog);display:flex;align-items:center;gap:8px}
+.dch-dot{width:7px;height:7px;border-radius:50%;background:var(--fog);flex-shrink:0}
+.dch-dot.active{background:#22c55e;box-shadow:0 0 5px rgba(34,197,94,.4)}
+.dch-title{font-size:11px;font-weight:600;color:var(--ink3);letter-spacing:.01em}
+.dch-sub{font-size:10px;color:var(--mist2);margin-left:auto}
+.dz{margin:14px;border:1.5px dashed var(--fog);border-radius:var(--r);padding:28px 20px;text-align:center;cursor:pointer;transition:all .15s;background:var(--fog3)}
+.dz:hover,.dz.over{border-color:var(--brand);background:var(--brand-tint)}
+.dz.has{border-style:solid;border-color:var(--emerald-line);background:var(--emerald-tint)}
+.dz-icon{font-size:28px;margin-bottom:8px;display:block;opacity:.5}
+.dz.has .dz-icon{opacity:1}
+.dz-title{font-size:13px;font-weight:500;color:var(--ink3);margin-bottom:3px}
+.dz-sub{font-size:11px;color:var(--mist2)}
+.dz-name{font-size:12px;font-weight:600;color:var(--emerald);word-break:break-all;margin-bottom:3px}
+.dz-rm{font-size:10px;color:var(--red);background:none;border:none;cursor:pointer;font-family:inherit;text-decoration:underline;margin-top:4px}
+input[type=file]{display:none}
+
+/* Review config */
+.config-card{background:var(--white);border:1px solid var(--fog);border-radius:var(--rl)}
+.config-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:0}
+.config-col{padding:12px 14px;border-right:1px solid var(--fog)}
+.config-col:last-child{border-right:none}
+.cfg-lbl{font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--mist2);margin-bottom:8px;display:block}
+.segs{display:flex;flex-direction:column;gap:2px}
+.seg{padding:6px 9px;font-size:11px;font-weight:500;background:none;border:1px solid transparent;border-radius:var(--r);color:var(--mist2);cursor:pointer;text-align:left;font-family:inherit;transition:all .1s;display:flex;align-items:center;gap:6px}
+.seg:hover{background:var(--fog2);color:var(--ink3)}
+.seg.on{background:var(--brand-tint);border-color:var(--brand-glow);color:var(--brand);font-weight:600}
+.seg-dot{width:5px;height:5px;border-radius:50%;background:currentColor;flex-shrink:0;opacity:.6}
+
+/* Analyze CTA */
+.cta-zone{display:flex;flex-direction:column;gap:8px}
+.btn-review{width:100%;padding:14px 20px;background:var(--brand);color:#fff;border:none;border-radius:var(--rl);font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:10px;transition:all .15s;letter-spacing:-.01em;box-shadow:0 2px 8px var(--brand-glow),0 1px 2px rgba(0,0,0,.12)}
+.btn-review:hover:not(:disabled){background:var(--brand-mid);box-shadow:0 4px 16px var(--brand-glow),0 2px 4px rgba(0,0,0,.15);transform:translateY(-1px)}
+.btn-review:disabled{background:var(--fog);color:var(--mist2);cursor:not-allowed;box-shadow:none;transform:none}
+.privacy{font-size:10px;color:var(--mist2);text-align:center;line-height:1.6}
+.privacy strong{color:var(--mist)}
+
+/* Status */
+.status-card{background:var(--white);border:1px solid var(--fog);border-radius:var(--rl);padding:14px 16px}
+.status-steps{display:flex;flex-direction:column;gap:6px}
+.step-row{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--mist2);transition:color .2s}
+.step-row.active{color:var(--ink2)}
+.step-row.done{color:var(--emerald)}
+.step-icon{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;background:var(--fog);color:var(--mist2);transition:all .2s}
+.step-icon.active{background:var(--brand-tint);color:var(--brand);animation:pulse 1.4s infinite}
+.step-icon.done{background:var(--emerald-tint);color:var(--emerald)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.step-line{font-size:11px}
+
+/* Errors */
+.err-card{background:var(--red-tint);border:1px solid var(--red-line);border-radius:var(--r);padding:10px 14px;font-size:12px;color:var(--red);display:flex;gap:8px}
+
+/* ── RESULTS ─────────────────────────────────────────────────────────────── */
+.res-section{display:flex;flex-direction:column;gap:12px}
+
+/* Summary strip */
+.summary-strip{background:var(--ink);border-radius:var(--rl);padding:16px 18px;color:#fff}
+.ss-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px}
+.ss-title{font-size:16px;font-weight:600;letter-spacing:-.02em}
+.ss-id{font-size:10px;color:rgba(255,255,255,.35);font-family:'DM Mono',monospace;margin-top:3px}
+.ss-badges{display:flex;gap:6px;flex-shrink:0}
+.risk-badge{font-size:10px;font-weight:700;padding:4px 10px;border-radius:3px;letter-spacing:.04em;text-transform:uppercase}
+.rb-H{background:rgba(239,68,68,.15);color:#fca5a5;border:1px solid rgba(239,68,68,.25)}
+.rb-M{background:rgba(251,146,60,.15);color:#fdba74;border:1px solid rgba(251,146,60,.25)}
+.rb-L{background:rgba(34,197,94,.15);color:#86efac;border:1px solid rgba(34,197,94,.25)}
+.ready-badge{font-size:10px;font-weight:600;padding:4px 10px;border-radius:3px;letter-spacing:.02em}
+.rbadge-nr{background:rgba(239,68,68,.15);color:#fca5a5;border:1px solid rgba(239,68,68,.2)}
+.rbadge-nw{background:rgba(251,146,60,.15);color:#fdba74;border:1px solid rgba(251,146,60,.2)}
+.rbadge-mr{background:rgba(234,179,8,.15);color:#fde68a;border:1px solid rgba(234,179,8,.2)}
+.rbadge-ar{background:rgba(34,197,94,.15);color:#86efac;border:1px solid rgba(34,197,94,.2)}
+.ss-text{font-size:12px;color:rgba(255,255,255,.6);line-height:1.7}
+
+/* Stats row */
+.stats-row{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+.stat{background:var(--white);border:1px solid var(--fog);border-radius:var(--r);padding:12px 10px;text-align:center}
+.stat-v{font-size:24px;font-weight:700;line-height:1;letter-spacing:-.03em}
+.stat-l{font-size:9px;color:var(--mist2);margin-top:3px;font-weight:600;text-transform:uppercase;letter-spacing:.05em}
+.sv0{color:var(--ink3)}.sv1{color:var(--red)}.sv2{color:var(--amber)}.sv3{color:var(--gold)}.sv4{color:var(--sapphire)}.sv5{color:var(--emerald)}
+
+/* Download banner */
+.dl-banner{background:var(--emerald-tint);border:1px solid var(--emerald-line);border-radius:var(--rl);padding:14px 16px;display:flex;align-items:center;gap:12px}
+.dl-ico{font-size:24px;flex-shrink:0}
+.dl-info{flex:1}
+.dl-title{font-size:13px;font-weight:600;color:var(--emerald)}
+.dl-sub{font-size:10px;color:var(--mist2);margin-top:2px}
+.btn-dl{padding:9px 18px;background:var(--emerald);color:#fff;border:none;border-radius:var(--r);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap}
+.btn-dl:hover{opacity:.9}
+.btn-report{padding:9px 14px;background:var(--white);color:var(--ink3);border:1px solid var(--fog);border-radius:var(--r);font-size:11px;font-weight:500;cursor:pointer;font-family:inherit;white-space:nowrap;margin-left:6px}
+.btn-report:hover{background:var(--fog2)}
+
+/* Filter toolbar */
+.filter-tb{background:var(--white);border:1px solid var(--fog);border-radius:var(--r);padding:8px 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.filter-label{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--mist2);white-space:nowrap}
+.filter-chips{display:flex;gap:4px;flex-wrap:wrap;flex:1}
+.chip{font-size:10px;font-weight:600;padding:4px 10px;border-radius:20px;border:1px solid var(--fog2);background:var(--fog2);color:var(--mist);cursor:pointer;transition:all .1s;display:flex;align-items:center;gap:4px}
+.chip:hover{border-color:var(--mist3);color:var(--ink3)}
+.chip.on{background:var(--brand-tint);border-color:var(--brand-glow);color:var(--brand)}
+.filter-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.new-btn{font-size:11px;padding:5px 11px;background:none;border:1px solid var(--fog);border-radius:var(--r);color:var(--mist);cursor:pointer;font-family:inherit}
+.new-btn:hover{background:var(--fog2);color:var(--ink3)}
+
+/* ── RIGHT PANEL ─────────────────────────────────────────────────────────── */
+.panel-r{background:var(--white);border-left:1px solid var(--fog);display:flex;flex-direction:column;overflow:hidden}
+.pr-head{padding:13px 16px;border-bottom:1px solid var(--fog);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.pr-title{font-size:12px;font-weight:600;color:var(--ink3)}
+.pr-count{font-size:10px;color:var(--mist2);background:var(--fog2);padding:2px 8px;border-radius:20px}
+.findings-list{flex:1;overflow-y:auto;padding:8px}
+.fc-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:10px;color:var(--mist2);text-align:center;padding:20px}
+.fc-empty-icon{font-size:36px;opacity:.25}
+.fc-empty p{font-size:12px;line-height:1.6}
+
+/* Finding card */
+.fc{background:var(--fog3);border:1px solid var(--fog);border-radius:var(--rl);margin-bottom:6px;overflow:hidden;transition:box-shadow .12s}
+.fc:hover{box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.fc.sC{border-left:3px solid var(--red)}
+.fc.sM{border-left:3px solid var(--amber)}
+.fc.sN{border-left:3px solid var(--gold)}
+.fc.sObs{border-left:3px solid var(--sapphire)}
+.fc.sOfi{border-left:3px solid var(--emerald)}
+.fc.sI{border-left:3px solid var(--mist3)}
+
+.fc-hdr{padding:10px 12px;cursor:pointer;display:flex;align-items:flex-start;gap:8px}
+.fc-hdr:hover{background:rgba(0,0,0,.02)}
+.fc-badges{display:flex;gap:4px;margin-bottom:4px;flex-wrap:wrap}
+.sb{font-size:9px;font-weight:700;padding:2px 7px;border-radius:3px;text-transform:uppercase;letter-spacing:.04em}
+.sbC{background:var(--red-tint);color:var(--red);border:1px solid var(--red-line)}
+.sbM{background:var(--amber-tint);color:var(--amber);border:1px solid var(--amber-line)}
+.sbN{background:var(--gold-tint);color:var(--gold);border:1px solid var(--gold-line)}
+.sbObs{background:var(--sapphire-tint);color:var(--sapphire);border:1px solid var(--sapphire-line)}
+.sbOfi{background:var(--emerald-tint);color:var(--emerald);border:1px solid var(--emerald-line)}
+.sbI{background:var(--fog2);color:var(--mist);border:1px solid var(--fog)}
+.sb-type{background:var(--fog2);color:var(--mist);border:1px solid var(--fog);font-weight:500}
+.fc-title{font-size:12px;font-weight:600;color:var(--ink2);line-height:1.35;flex:1}
+.fc-chevron{font-size:12px;color:var(--mist3);flex-shrink:0;margin-top:2px;transition:transform .15s}
+.fc-chevron.open{transform:rotate(180deg)}
+
+.fc-body{display:none;border-top:1px solid var(--fog)}
+.fc-body.open{display:block}
+
+/* Finding body sections */
+.fp{padding:9px 12px;border-bottom:1px solid var(--fog)}
+.fp:last-child{border-bottom:none}
+.fp-hdr{font-size:9px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--mist2);margin-bottom:5px;display:flex;align-items:center;justify-content:space-between}
+.fp-val{font-size:11px;color:var(--ink3);line-height:1.65}
+
+.reg-pill{display:inline-block;font-size:10px;font-family:'DM Mono',monospace;background:var(--brand-tint);color:var(--brand);padding:3px 8px;border-radius:3px;border:1px solid var(--brand-glow)}
+.ev-block{background:var(--ink);border-radius:var(--r);padding:9px 11px;font-size:10px;font-family:'DM Mono',monospace;color:rgba(255,255,255,.6);line-height:1.65;white-space:pre-wrap;word-break:break-word;border-left:3px solid var(--brand)}
+.cmnt-block{background:var(--brand-tint);border:1px solid var(--brand-glow);border-radius:var(--r);padding:9px 11px;font-size:11px;color:var(--brand-dark);line-height:1.65;font-style:italic}
+.fix-block{background:var(--emerald-tint);border:1px solid var(--emerald-line);border-radius:var(--r);padding:9px 11px;font-size:11px;color:var(--emerald);line-height:1.65}
+.code-block{background:var(--violet-tint);border:1px solid var(--violet-line);border-left:2px solid var(--violet);border-radius:var(--r);padding:9px 11px;font-size:10px;font-family:'DM Mono',monospace;color:var(--violet);line-height:1.65;white-space:pre-wrap;word-break:break-word}
+.tc-del{color:var(--red);text-decoration:line-through}
+.tc-ins{color:var(--emerald);margin-left:6px}
+
+/* Disposition buttons */
+.disp-row{display:flex;gap:5px;margin-top:4px}
+.disp-btn{flex:1;padding:5px 6px;font-size:10px;font-weight:600;border-radius:var(--r);cursor:pointer;font-family:inherit;text-align:center;border:1px solid;transition:all .1s}
+.disp-accept{background:var(--emerald-tint);color:var(--emerald);border-color:var(--emerald-line)}
+.disp-accept:hover,.disp-accept.sel{background:var(--emerald);color:#fff}
+.disp-reject{background:var(--red-tint);color:var(--red);border-color:var(--red-line)}
+.disp-reject:hover,.disp-reject.sel{background:var(--red);color:#fff}
+.disp-defer{background:var(--gold-tint);color:var(--gold);border-color:var(--gold-line)}
+.disp-defer:hover,.disp-defer.sel{background:var(--gold);color:#fff}
+.disp-note{flex:2;padding:5px 8px;font-size:10px;background:var(--fog2);border:1px solid var(--fog);border-radius:var(--r);color:var(--ink3);outline:none;font-family:inherit}
+.disp-note:focus{border-color:var(--brand)}
+
+/* Copy button */
+.cpy{font-size:9px;padding:2px 8px;border-radius:3px;border:1px solid var(--fog);background:var(--white);color:var(--mist);cursor:pointer;font-family:inherit;font-weight:600;transition:all .1s}
+.cpy:hover{background:var(--fog2);color:var(--ink3)}
+.cpy.ok{background:var(--emerald-tint);color:var(--emerald);border-color:var(--emerald-line)}
+
+/* ── MODAL ─────────────────────────────────────────────────────────────── */
+.modal-bg{position:fixed;inset:0;background:rgba(10,14,26,.5);backdrop-filter:blur(3px);z-index:200;display:flex;align-items:center;justify-content:center}
+.modal{background:var(--white);border:1px solid var(--fog);border-radius:var(--rxl);width:400px;max-width:94vw;box-shadow:0 20px 60px rgba(0,0,0,.15)}
+.modal-h{padding:14px 18px;border-bottom:1px solid var(--fog);display:flex;align-items:center;justify-content:space-between}
+.modal-t{font-size:13px;font-weight:600;color:var(--ink2)}
+.modal-x{background:none;border:none;font-size:18px;color:var(--mist2);cursor:pointer;line-height:1;padding:2px}
+.modal-x:hover{color:var(--ink)}
+.modal-b{padding:18px;display:flex;flex-direction:column;gap:12px}
+.m-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--mist2);margin-bottom:4px;display:block}
+.m-inp{width:100%;font-size:12px;padding:8px 11px;background:var(--fog2);border:1px solid var(--fog);border-radius:var(--r);color:var(--ink2);outline:none;font-family:inherit}
+.m-inp:focus{border-color:var(--brand);background:var(--white)}
+.m-dz{border:1.5px dashed var(--fog);border-radius:var(--r);padding:20px;text-align:center;cursor:pointer;transition:all .12s;background:var(--fog3)}
+.m-dz:hover,.m-dz.has{border-color:var(--emerald-line);background:var(--emerald-tint)}
+.m-btn{padding:9px 18px;background:var(--brand);color:#fff;border:none;border-radius:var(--r);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
+.m-btn:disabled{opacity:.4;cursor:not-allowed}
+.m-err{font-size:11px;color:var(--red)}
+.m-ok{font-size:11px;color:var(--emerald)}
+
+/* Settings modal */
+.set-section{display:flex;flex-direction:column;gap:4px}
+.set-section+.set-section{padding-top:12px;border-top:1px solid var(--fog);margin-top:4px}
+
+/* Report modal */
+.report-preview{background:var(--fog3);border:1px solid var(--fog);border-radius:var(--r);padding:16px;font-size:11px;max-height:300px;overflow-y:auto;font-family:'DM Mono',monospace;color:var(--ink3);line-height:1.7}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--fog);border-radius:2px}
+::-webkit-scrollbar-thumb:hover{background:var(--mist3)}
+
+.hidden{display:none!important}
+
+/* Print styles */
+@media print{
+  .chrome,.sidebar,.panel-r,.cta-zone,.filter-tb,.disp-row{display:none!important}
+  .workspace{display:block}
+  .main{padding:0}
+  body{background:#fff}
+}
+</style>
+</head>
+<body>
+
+<!-- CHROME -->
+<div class="chrome">
+  <div class="wordmark">
+    <div class="wm-icon">
+      <svg viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+    </div>
+    <div class="wm-name">DocuReview</div>
+    <span class="wm-badge">AI</span>
+  </div>
+  <div class="chrome-mid">
+    <div class="review-id">Review ID <span id="rev-id">—</span></div>
+  </div>
+  <div class="chrome-r">
+    <div class="chrome-user">
+      <div class="avatar" id="chrome-initials">—</div>
+      <span id="chrome-author">—</span>
+    </div>
+    <button class="ghost-btn" onclick="openSet()">Settings</button>
+    <button class="ghost-btn" onclick="openHistory()">History</button>
+  </div>
+</div>
+
+<div class="workspace">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sb-head">
+      <span class="sb-title">Source Library</span>
+      <button class="sb-add" onclick="openSrcModal()">+ Add</button>
+    </div>
+    <div class="src-scroll" id="src-list">
+      <div class="src-empty">
+        <span class="src-empty-icon">📚</span>
+        No sources yet.<br>Add reference documents like URS, SOPs, CFRs, or ISO standards.
+      </div>
+    </div>
+    <button class="add-src-btn" onclick="openSrcModal()">
+      <span>＋</span> Add Source Document
+    </button>
+    <div class="sb-hint">
+      Checked sources are used in the review.<br>Add once, reuse every time.
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+
+    <!-- Metadata bar -->
+    <div class="meta-bar">
+      <div class="meta-field">
+        <span class="meta-lbl">Project / Document</span>
+        <input class="meta-inp" id="meta-doc" placeholder="e.g. SBSVP-2025-001 SBS Validation Plan" autocomplete="off">
+      </div>
+      <div class="meta-divider"></div>
+      <div class="meta-field" style="max-width:100px">
+        <span class="meta-lbl">Revision</span>
+        <input class="meta-inp" id="meta-rev" placeholder="Rev 00" autocomplete="off">
+      </div>
+      <div class="meta-divider"></div>
+      <div class="meta-field" style="max-width:120px">
+        <span class="meta-lbl">Company</span>
+        <input class="meta-inp" id="meta-company" placeholder="MedTech Inc." autocomplete="off">
+      </div>
+      <div class="meta-divider"></div>
+      <div class="meta-field" style="max-width:110px">
+        <span class="meta-lbl">Date</span>
+        <input class="meta-inp" id="meta-date" type="date">
+      </div>
+    </div>
+
+    <!-- API Key strip -->
+    <div class="ak-strip" id="ak-strip">
+      <div class="ak-ico">🔑</div>
+      <div class="ak-body">
+        <div class="ak-title">AI Engine API Key</div>
+        <div class="ak-sub">Enter your API key. Stored in session memory only — never transmitted or logged.</div>
+        <div class="ak-row">
+          <input class="ak-inp" id="ak-inp" type="password" placeholder="Enter API key…" autocomplete="off">
+          <button class="ak-save" onclick="saveKey()">Authenticate</button>
+        </div>
+      </div>
+    </div>
+    <div class="ak-strip ok hidden" id="ak-ok">
+      <div class="ak-ico" style="background:rgba(34,197,94,.15)">✅</div>
+      <div class="ak-body">
+        <div class="ak-ok-row">
+          <div class="ak-ok-dot"></div>
+          <span class="ak-ok-txt">API key authenticated</span>
+          <span class="ak-chg" onclick="changeKey()">Change</span>
+        </div>
+        <div class="ak-sub" style="margin-top:3px">Ready to analyze documents</div>
+      </div>
+    </div>
+
+    <!-- Error bar -->
+    <div class="err-card hidden" id="err-bar"><span>⚠</span><span id="err-txt"></span></div>
+
+    <!-- Drop zone -->
+    <div class="dropcard">
+      <div class="dropcard-h">
+        <div class="dch-dot" id="doc-dot"></div>
+        <span class="dch-title">Primary Document</span>
+        <span class="dch-sub">.docx · .pdf · .txt · max 10MB</span>
+      </div>
+      <div class="dz" id="dz"
+        onclick="document.getElementById('inp-main').click()"
+        ondragover="dzOv(event)" ondragleave="dzLv()" ondrop="dzDp(event)">
+        <div id="dz-e">
+          <span class="dz-icon">📤</span>
+          <div class="dz-title">Drop document here or click to browse</div>
+          <div class="dz-sub">Supports Word, PDF (text-based), and plain text</div>
+        </div>
+        <div id="dz-f" class="hidden">
+          <span class="dz-icon">📄</span>
+          <div class="dz-name" id="dz-nm"></div>
+          <div class="dz-sub" id="dz-sz"></div>
+          <button class="dz-rm" onclick="rmFile(event)">Remove</button>
+        </div>
+      </div>
+      <input type="file" id="inp-main" accept=".docx,.pdf,.txt" onchange="onMainFile(event)">
+    </div>
+
+    <!-- Review config -->
+    <div class="config-card">
+      <div style="padding:11px 14px;border-bottom:1px solid var(--fog)">
+        <span style="font-size:11px;font-weight:600;color:var(--ink3)">Review Configuration</span>
+      </div>
+      <div class="config-grid">
+        <div class="config-col">
+          <span class="cfg-lbl">Language</span>
+          <div class="segs" id="seg-lang">
+            <button class="seg on" data-v="Turkish" onclick="setSeg('lang',this)"><span class="seg-dot"></span>🇹🇷 Turkish</button>
+            <button class="seg" data-v="English" onclick="setSeg('lang',this)"><span class="seg-dot"></span>🇺🇸 English</button>
+          </div>
+        </div>
+        <div class="config-col">
+          <span class="cfg-lbl">Comment Tone</span>
+          <div class="segs" id="seg-tone">
+            <button class="seg on" data-v="Formal" onclick="setSeg('tone',this)"><span class="seg-dot"></span>Formal / Audit</button>
+            <button class="seg" data-v="Simple" onclick="setSeg('tone',this)"><span class="seg-dot"></span>Simple</button>
+            <button class="seg" data-v="Friendly" onclick="setSeg('tone',this)"><span class="seg-dot"></span>Friendly</button>
+          </div>
+        </div>
+        <div class="config-col">
+          <span class="cfg-lbl">Regulatory</span>
+          <div class="segs" id="seg-reg">
+            <button class="seg on" data-v="ISO13485" onclick="setSeg('reg',this)"><span class="seg-dot"></span>ISO 13485</button>
+            <button class="seg" data-v="EUMDR" onclick="setSeg('reg',this)"><span class="seg-dot"></span>EU MDR</button>
+            <button class="seg" data-v="FDA" onclick="setSeg('reg',this)"><span class="seg-dot"></span>FDA 21 CFR</button>
+            <button class="seg" data-v="ALL" onclick="setSeg('reg',this)"><span class="seg-dot"></span>All Pathways</button>
+          </div>
+        </div>
+        <div class="config-col">
+          <span class="cfg-lbl">Intensity</span>
+          <div class="segs" id="seg-int">
+            <button class="seg" data-v="Light" onclick="setSeg('int',this)"><span class="seg-dot"></span>Light</button>
+            <button class="seg on" data-v="Standard" onclick="setSeg('int',this)"><span class="seg-dot"></span>Standard</button>
+            <button class="seg" data-v="Strict" onclick="setSeg('int',this)"><span class="seg-dot"></span>Strict / Audit</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Status / loading -->
+    <div class="status-card hidden" id="status-card">
+      <div style="font-size:11px;font-weight:600;color:var(--ink3);margin-bottom:10px">Analysis in progress…</div>
+      <div class="status-steps" id="status-steps"></div>
+    </div>
+
+    <!-- CTA -->
+    <div class="cta-zone">
+      <button class="btn-review" id="btn-review" onclick="startReview()" disabled>
+        ▶ &nbsp; Start AI Review
+      </button>
+      <div class="privacy">
+        🔒 Documents are not stored on any server. Content is processed by AI engine for analysis only.
+        Output: <strong>FileName_reviewed.docx</strong> — original untouched, comments injected into copy.
+      </div>
+    </div>
+
+    <!-- Results section -->
+    <div class="res-section hidden" id="res-section">
+
+      <div class="summary-strip">
+        <div class="ss-top">
+          <div>
+            <div class="ss-title">Review Complete</div>
+            <div class="ss-id" id="ss-id"></div>
+          </div>
+          <div class="ss-badges">
+            <span class="risk-badge" id="risk-b"></span>
+            <span class="ready-badge" id="ready-b"></span>
+          </div>
+        </div>
+        <div class="ss-text" id="ss-text"></div>
+      </div>
+
+      <div class="stats-row">
+        <div class="stat"><div class="stat-v sv0" id="st0">0</div><div class="stat-l">Total</div></div>
+        <div class="stat"><div class="stat-v sv1" id="st1">0</div><div class="stat-l">Critical</div></div>
+        <div class="stat"><div class="stat-v sv2" id="st2">0</div><div class="stat-l">Major</div></div>
+        <div class="stat"><div class="stat-v sv3" id="st3">0</div><div class="stat-l">Minor</div></div>
+        <div class="stat"><div class="stat-v sv4" id="st4">0</div><div class="stat-l">Observ.</div></div>
+        <div class="stat"><div class="stat-v sv5" id="st5">0</div><div class="stat-l">OFI</div></div>
+      </div>
+
+      <div class="dl-banner" id="dl-banner">
+        <div class="dl-ico">📄</div>
+        <div class="dl-info">
+          <div class="dl-title" id="dl-title">Reviewed document ready</div>
+          <div class="dl-sub">All findings injected as Word Comments. Track Changes applied where applicable.</div>
+        </div>
+        <button class="btn-dl" onclick="downloadDocx()">⬇ Download .docx</button>
+        <button class="btn-report" onclick="openReport()">📊 Export Report</button>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- RIGHT PANEL — Findings -->
+  <div class="panel-r">
+    <div class="pr-head">
+      <span class="pr-title">Findings</span>
+      <span class="pr-count" id="pr-count">—</span>
+    </div>
+
+    <div style="padding:8px;border-bottom:1px solid var(--fog);flex-shrink:0" id="filter-wrap" class="hidden">
+      <div class="filter-chips">
+        <button class="chip on" onclick="flt('all',this)">All</button>
+        <button class="chip" onclick="flt('Critical',this)">🔴 Critical</button>
+        <button class="chip" onclick="flt('Major',this)">🟠 Major</button>
+        <button class="chip" onclick="flt('Minor',this)">🟡 Minor</button>
+        <button class="chip" onclick="flt('OBSERVATION',this)">🔵 Obs.</button>
+        <button class="chip" onclick="flt('OFI',this)">🟢 OFI</button>
+        <button class="chip" onclick="flt('LOGIC',this)">Logic</button>
+        <button class="chip" onclick="flt('QA_GAP',this)">QA Gap</button>
+        <button class="chip" onclick="flt('TRACEABILITY',this)">Trace</button>
+      </div>
+    </div>
+
+    <div class="findings-list" id="findings-list">
+      <div class="fc-empty">
+        <div class="fc-empty-icon">🔎</div>
+        <p>Start a review to see findings here.<br>Each finding includes source evidence,<br>regulatory reference, and Word comment.</p>
+      </div>
+    </div>
+
+    <div style="padding:10px;border-top:1px solid var(--fog);flex-shrink:0" id="bottom-actions" class="hidden">
+      <button class="new-btn" style="width:100%" onclick="resetApp()">↺ New Review</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- SOURCE MODAL -->
+<div class="modal-bg hidden" id="src-modal" onclick="closeSrc(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-h"><span class="modal-t">Add Source Document</span><button class="modal-x" onclick="closeSrc()">×</button></div>
+    <div class="modal-b">
+      <div><label class="m-lbl">Source Name</label><input class="m-inp" id="src-name" type="text" placeholder="e.g. ISO 11607-1:2019 / Company SOP-001"></div>
+      <div class="m-dz" id="m-dz" onclick="document.getElementById('inp-src').click()">
+        <div id="m-dz-e"><div style="font-size:20px;margin-bottom:6px">📤</div><div style="font-size:12px;color:var(--mist)">Select file</div><div style="font-size:10px;color:var(--mist2);margin-top:3px">.pdf · .docx · .txt</div></div>
+        <div id="m-dz-f" class="hidden"><div style="font-size:18px;margin-bottom:5px">✅</div><div style="font-size:12px;font-weight:600;color:var(--emerald)" id="m-nm"></div></div>
+      </div>
+      <input type="file" id="inp-src" accept=".pdf,.docx,.txt" onchange="onSrcF(event)">
+      <button class="m-btn" id="src-add-btn" onclick="addSource()" disabled>Add to Library</button>
+      <div id="src-err" class="m-err hidden"></div>
+    </div>
+  </div>
+</div>
+
+<!-- SETTINGS MODAL -->
+<div class="modal-bg hidden" id="set-modal" onclick="closeSet(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-h"><span class="modal-t">Settings</span><button class="modal-x" onclick="closeSet()">×</button></div>
+    <div class="modal-b">
+      <div class="set-section">
+        <div><label class="m-lbl">Reviewer Name (appears in Word comments)</label><input class="m-inp" id="sp-author" type="text" placeholder="Full Name"></div>
+        <div><label class="m-lbl">Initials</label><input class="m-inp" id="sp-init" type="text" placeholder="JS" maxlength="4" style="width:72px"></div>
+        <div><label class="m-lbl">Organization</label><input class="m-inp" id="sp-org" type="text" placeholder="MedTech Inc."></div>
+      </div>
+      <div class="set-section">
+        <div><label class="m-lbl">AI Engine API Key</label><input class="m-inp" id="sp-apikey" type="password" placeholder="Enter API key…" style="font-family:'DM Mono',monospace"></div>
+      </div>
+      <button class="m-btn" onclick="saveSet()">Save Settings</button>
+      <div id="set-ok" class="m-ok hidden">✅ Settings saved</div>
+    </div>
+  </div>
+</div>
+
+<!-- REPORT MODAL -->
+<div class="modal-bg hidden" id="report-modal" onclick="closeReport(event)">
+  <div class="modal" style="width:540px" onclick="event.stopPropagation()">
+    <div class="modal-h"><span class="modal-t">Export QA Review Report</span><button class="modal-x" onclick="closeReport()">×</button></div>
+    <div class="modal-b">
+      <div class="report-preview" id="report-preview"></div>
+      <div style="display:flex;gap:8px">
+        <button class="m-btn" onclick="printReport()">🖨 Print / PDF</button>
+        <button class="m-btn" style="background:var(--emerald)" onclick="exportCSV()">📊 Export CSV</button>
+        <button class="m-btn" style="background:var(--ink3)" onclick="closeReport()">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- HISTORY MODAL -->
+<div class="modal-bg hidden" id="hist-modal" onclick="closeHistory(event)">
+  <div class="modal" style="width:480px" onclick="event.stopPropagation()">
+    <div class="modal-h"><span class="modal-t">Review History</span><button class="modal-x" onclick="closeHistory()">×</button></div>
+    <div class="modal-b" id="hist-body" style="max-height:360px;overflow-y:auto"></div>
+  </div>
+</div>
+
+<script>
+if(typeof pdfjsLib!=='undefined')pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let apiKey='',mainFile=null,mainDocxBuf=null,srcModalFile=null;
+let allFindings=[],reviewedBlob=null,outName='reviewed.docx',currentResult=null;
+let sources=JSON.parse(localStorage.getItem('dr_src')||'[]');
+let cfg=JSON.parse(localStorage.getItem('dr_cfg')||'{"author":"","initials":"","org":""}');
+let history=JSON.parse(localStorage.getItem('dr_hist')||'[]');
+const sel={lang:'Turkish',tone:'Formal',reg:'ISO13485',int:'Standard'};
+const dispositions={};
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+(function(){
+  document.getElementById('sp-author').value=cfg.author||'';
+  document.getElementById('sp-init').value=cfg.initials||'';
+  document.getElementById('sp-org').value=cfg.org||'';
+  updateChrome();
+  document.getElementById('meta-date').value=new Date().toISOString().split('T')[0];
+  const k=sessionStorage.getItem('dr_key');
+  if(k&&k.length>=20){apiKey=k;showKeyOk();}
+  renderSources();
+  generateReviewId();
+})();
+
+function generateReviewId(){
+  const id='RVW-'+Date.now().toString(36).toUpperCase();
+  document.getElementById('rev-id').textContent=id;
+  return id;
+}
+function updateChrome(){
+  const a=cfg.author||'—';
+  document.getElementById('chrome-author').textContent=a;
+  document.getElementById('chrome-initials').textContent=a.split(' ').map(w=>w[0]||'').join('').slice(0,2)||'—';
+}
+
+// ── API Key ───────────────────────────────────────────────────────────────────
+function saveKey(){
+  const k=document.getElementById('ak-inp').value.trim();
+  if(!k||k.length<20){showErr('Invalid API key — please check and try again.');return;}
+  apiKey=k;sessionStorage.setItem('dr_key',k);showKeyOk();
+}
+function showKeyOk(){
+  document.getElementById('ak-strip').classList.add('hidden');
+  document.getElementById('ak-ok').classList.remove('hidden');
+  updateBtn();
+}
+function changeKey(){
+  apiKey='';sessionStorage.removeItem('dr_key');
+  document.getElementById('ak-strip').classList.remove('hidden');
+  document.getElementById('ak-ok').classList.add('hidden');
+  document.getElementById('ak-inp').value='';updateBtn();
+}
+document.getElementById('ak-inp').addEventListener('keydown',e=>{if(e.key==='Enter')saveKey();});
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+function openSet(){document.getElementById('set-modal').classList.remove('hidden');}
+function closeSet(e){if(!e||e.target.id==='set-modal')document.getElementById('set-modal').classList.add('hidden');}
+function saveSet(){
+  cfg.author=document.getElementById('sp-author').value.trim();
+  cfg.initials=document.getElementById('sp-init').value.trim().toUpperCase();
+  cfg.org=document.getElementById('sp-org').value.trim();
+  localStorage.setItem('dr_cfg',JSON.stringify(cfg));
+  const newKey=document.getElementById('sp-apikey').value.trim();
+  if(newKey&&newKey.length>=20){apiKey=newKey;sessionStorage.setItem('dr_key',newKey);showKeyOk();}
+  updateChrome();
+  document.getElementById('meta-company').value=cfg.org||document.getElementById('meta-company').value;
+  const ok=document.getElementById('set-ok');ok.classList.remove('hidden');
+  setTimeout(()=>ok.classList.add('hidden'),2500);
+}
+
+// ── Seg buttons ───────────────────────────────────────────────────────────────
+function setSeg(g,btn){
+  document.querySelectorAll('#seg-'+g+' .seg').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');sel[g]=btn.dataset.v;
+}
+
+// ── Source Library ────────────────────────────────────────────────────────────
+function saveSrcs(){localStorage.setItem('dr_src',JSON.stringify(sources));}
+function renderSources(){
+  const el=document.getElementById('src-list');
+  if(!sources.length){
+    el.innerHTML='<div class="src-empty"><span class="src-empty-icon">📚</span>No sources yet.<br>Add reference documents like<br>URS, SOPs, CFRs, or ISO standards.</div>';
+    return;
+  }
+  el.innerHTML=sources.map(s=>`
+    <div class="src-item" id="si-${s.id}">
+      <input type="checkbox" class="src-cb" ${s.active?'checked':''} onchange="togSrc('${s.id}',this.checked)">
+      <div class="src-info">
+        <div class="src-name" title="${esc(s.name)}">${esc(s.name)}</div>
+        <div class="src-meta">${s.type} · ${(s.words||0).toLocaleString()} words · ${fmtDate(s.addedAt)}</div>
+      </div>
+      <button class="src-del" onclick="delSrc('${s.id}')" title="Remove">×</button>
+    </div>`).join('');
+}
+function togSrc(id,v){const s=sources.find(x=>x.id===id);if(s){s.active=v;saveSrcs();}}
+function delSrc(id){if(!confirm('Remove this source from library?'))return;sources=sources.filter(s=>s.id!==id);saveSrcs();renderSources();}
+function openSrcModal(){document.getElementById('src-modal').classList.remove('hidden');}
+function closeSrc(e){
+  if(!e||e.target.id==='src-modal'){
+    document.getElementById('src-modal').classList.add('hidden');
+    srcModalFile=null;
+    document.getElementById('m-dz-e').classList.remove('hidden');
+    document.getElementById('m-dz-f').classList.add('hidden');
+    document.getElementById('m-dz').classList.remove('has');
+    document.getElementById('src-name').value='';
+    document.getElementById('src-add-btn').disabled=true;
+    document.getElementById('src-err').classList.add('hidden');
+    document.getElementById('inp-src').value='';
+  }
+}
+function onSrcF(e){
+  const f=e.target.files[0];if(!f)return;srcModalFile=f;
+  document.getElementById('m-dz-e').classList.add('hidden');
+  document.getElementById('m-dz-f').classList.remove('hidden');
+  document.getElementById('m-nm').textContent=f.name;
+  document.getElementById('m-dz').classList.add('has');
+  if(!document.getElementById('src-name').value) document.getElementById('src-name').value=f.name.replace(/\.[^.]+$/,'');
+  document.getElementById('src-add-btn').disabled=false;
+}
+async function addSource(){
+  if(!srcModalFile)return;
+  const btn=document.getElementById('src-add-btn');const errEl=document.getElementById('src-err');
+  btn.disabled=true;btn.textContent='Adding…';errEl.classList.add('hidden');
+  try{
+    const text=await readFileText(srcModalFile);
+    if(!text.trim())throw new Error('No text found in file.');
+    const id='s'+Date.now()+Math.random().toString(36).slice(2,5);
+    sources.push({id,name:document.getElementById('src-name').value||srcModalFile.name,
+      fileName:srcModalFile.name,type:srcModalFile.name.split('.').pop().toUpperCase(),
+      addedAt:new Date().toISOString(),active:true,words:text.split(/\s+/).filter(Boolean).length,text});
+    saveSrcs();renderSources();closeSrc();
+  }catch(err){errEl.textContent='⚠ '+err.message;errEl.classList.remove('hidden');btn.disabled=false;btn.textContent='Add to Library';}
+}
+
+// ── File ──────────────────────────────────────────────────────────────────────
+function fmtB(b){if(b<1024)return b+' B';if(b<1048576)return(b/1024).toFixed(1)+' KB';return(b/1048576).toFixed(1)+' MB';}
+function fmtDate(iso){try{return new Date(iso).toLocaleDateString('en-GB');}catch{return '';}}
+function updateBtn(){document.getElementById('btn-review').disabled=!(mainFile&&apiKey);}
+function showErr(m){const b=document.getElementById('err-bar');document.getElementById('err-txt').textContent=m;b.classList.toggle('hidden',!m);}
+
+function onMainFile(e){
+  const f=e.target.files[0];if(!f)return;mainFile=f;
+  document.getElementById('dz-e').classList.add('hidden');
+  document.getElementById('dz-f').classList.remove('hidden');
+  document.getElementById('dz-nm').textContent=f.name;
+  document.getElementById('dz-sz').textContent=fmtB(f.size);
+  document.getElementById('dz').classList.add('has');
+  document.getElementById('doc-dot').classList.add('active');
+  updateBtn();showErr('');
+}
+function rmFile(e){
+  e.stopPropagation();mainFile=null;mainDocxBuf=null;
+  document.getElementById('dz-e').classList.remove('hidden');
+  document.getElementById('dz-f').classList.add('hidden');
+  document.getElementById('dz').classList.remove('has');
+  document.getElementById('doc-dot').classList.remove('active');
+  document.getElementById('inp-main').value='';updateBtn();
+}
+function dzOv(e){e.preventDefault();document.getElementById('dz').classList.add('over');}
+function dzLv(){document.getElementById('dz').classList.remove('over');}
+function dzDp(e){e.preventDefault();dzLv();const f=e.dataTransfer.files[0];if(f){mainFile=f;onMainFile({target:{files:[f]}});}}
+
+async function readFileText(f){
+  const ext=f.name.split('.').pop().toLowerCase();
+  if(ext==='txt')return f.text();
+  if(ext==='docx'){const ab=await f.arrayBuffer();const r=await mammoth.extractRawText({arrayBuffer:ab});return r.value||'';}
+  if(ext==='pdf'){
+    if(typeof pdfjsLib==='undefined')throw new Error('PDF library unavailable.');
+    const ab=await f.arrayBuffer();const pdf=await pdfjsLib.getDocument({data:ab}).promise;
+    let t='';for(let i=1;i<=pdf.numPages;i++){const pg=await pdf.getPage(i);const ct=await pg.getTextContent();t+=ct.items.map(x=>x.str).join(' ')+'\n';}
+    if(!t.trim())throw new Error('No text in PDF. If scanned, OCR is required first.');
+    return t;
+  }
+  throw new Error('Unsupported format: .'+ext);
+}
+
+// ── Review ────────────────────────────────────────────────────────────────────
+const ANALYSIS_STEPS=[
+  {id:'parse',  label:'Parsing document structure…'},
+  {id:'load',   label:'Loading source library…'},
+  {id:'send',   label:'Sending to AI engine…'},
+  {id:'analyze',label:'Analyzing findings…'},
+  {id:'inject', label:'Injecting Word comments…'},
+  {id:'finalize',label:'Finalizing output…'},
+];
+
+function setStep(activeId){
+  ANALYSIS_STEPS.forEach(s=>{
+    const row=document.getElementById('step-'+s.id);
+    if(!row)return;
+    row.classList.remove('active','done');
+    const idx=ANALYSIS_STEPS.findIndex(x=>x.id===s.id);
+    const activeIdx=ANALYSIS_STEPS.findIndex(x=>x.id===activeId);
+    if(idx<activeIdx){row.classList.add('done');row.querySelector('.step-icon').textContent='✓';}
+    else if(idx===activeIdx){row.classList.add('active');row.querySelector('.step-icon').textContent='●';}
+    else{row.querySelector('.step-icon').textContent=(idx+1);}
+  });
+}
+
+async function startReview(){
+  if(!mainFile||!apiKey)return;
+  showErr('');
+  document.getElementById('res-section').classList.add('hidden');
+  document.getElementById('status-card').classList.remove('hidden');
+  document.getElementById('btn-review').disabled=true;
+
+  // Build steps UI
+  const stepsEl=document.getElementById('status-steps');
+  stepsEl.innerHTML=ANALYSIS_STEPS.map((s,i)=>
+    `<div class="step-row" id="step-${s.id}">
+       <div class="step-icon">${i+1}</div>
+       <span class="step-line">${s.label}</span>
+     </div>`
+  ).join('');
+
+  setStep('parse');
+  try{
+    const mainText=await readFileText(mainFile);
+    if(!mainText.trim())throw new Error('No readable text found in document.');
+    if(mainFile.name.toLowerCase().endsWith('.docx'))mainDocxBuf=await mainFile.arrayBuffer();
+
+    setStep('load');
+    const activeSrcs=sources.filter(s=>s.active&&s.text);
+
+    setStep('send');
+    const result=await callAI(mainText,mainFile.name,activeSrcs);
+    allFindings=result.findings||[];
+    currentResult=result;
+
+    setStep('inject');
+    let blob=null;
+    if(mainDocxBuf&&typeof JSZip!=='undefined'){
+      try{blob=await injectComments(mainDocxBuf,allFindings,cfg.author||'QA Reviewer',cfg.initials||'QR');}
+      catch(e){console.warn('Comment injection:',e);}
+    }
+    reviewedBlob=blob;
+    outName=mainFile.name.replace(/\.docx$/i,'')+'_reviewed.docx';
+
+    setStep('finalize');
+    await new Promise(r=>setTimeout(r,400));
+
+    renderResults(result);
+    document.getElementById('status-card').classList.add('hidden');
+    document.getElementById('res-section').classList.remove('hidden');
+    document.getElementById('btn-review').disabled=false;
+
+    // Save to history
+    saveToHistory(result);
+
+    setTimeout(()=>document.getElementById('res-section').scrollIntoView({behavior:'smooth'}),150);
+  }catch(err){
+    document.getElementById('status-card').classList.add('hidden');
+    document.getElementById('btn-review').disabled=false;
+    showErr(err.message||'Analysis failed. Please try again.');
+  }
+}
+
+function saveToHistory(result){
+  const entry={
+    id:document.getElementById('rev-id').textContent,
+    date:new Date().toISOString(),
+    docName:mainFile?.name,
+    docProject:document.getElementById('meta-doc').value,
+    findingCount:(result.findings||[]).length,
+    risk:result.overallRisk,
+    readiness:result.auditReadiness,
+  };
+  history.unshift(entry);
+  if(history.length>20)history.pop();
+  localStorage.setItem('dr_hist',JSON.stringify(history));
+}
+
+// ── AI Engine ───────────────────────────────────────────────────────────────────
+async function callAI(mainText,mainName,srcs){
+  const isTR=sel.lang==='Turkish';
+  const toneDef={
+    Turkish:{Formal:'Resmi audit dili: "Objective evidence was not available to demonstrate...", "The document does not include..." kalıpları kullan. Her cümle audit raporuna kopyalanabilir olmalı.',Simple:'Kısa ve anlaşılır Türkçe.',Friendly:'Samimi ekip içi tarz. Hocam, bence kullanılabilir.'},
+    English:{Formal:'Formal audit language: "Objective evidence was not available to demonstrate...", "No documented rationale was identified for...", "The document does not provide..." Use concise, regulatory-grade sentences.',Simple:'Clear and concise English.',Friendly:'Collegial team-review tone.'}
+  };
+  const intDef={
+    Light:'Report only obvious grammar errors and critical QA gaps. Fewer findings, higher impact.',
+    Standard:'Balanced: grammar + logic + QA gaps + source traceability. Every finding must be actionable.',
+    Strict:'Full audit-mode inspection. Every traceability gap, missing rationale, and inconsistency must be documented.'
+  };
+  const regContext={
+    EUMDR:'EU MDR 2017/745 Annex I GSPR, Annex II/III Technical File. Reference MEDDEV guidance where applicable. Flag Technical File completeness issues.',
+    FDA:'FDA 21 CFR Part 820 Quality System Regulation. Flag potential 483 observations. Reference relevant FDA guidance documents.',
+    ALL:'ISO 13485:2016 + EU MDR 2017/745 + FDA 21 CFR 820. Identify cross-regulatory conflicts and flag findings with all relevant references.',
+    ISO13485:'ISO 13485:2016 as primary reference. Use clause numbers (e.g. §7.5.6) in all regulatory references.'
+  };
+
+  const lines=mainText.split('\n').filter(l=>l.trim());
+  let paras='',charCount=0,truncated=false;
+  for(let i=0;i<lines.length;i++){
+    const line='['+i+'] '+lines[i]+'\n';
+    if(charCount+line.length>120000){paras+='\n[Document truncated at line '+i+'/'+lines.length+' due to length limit]';truncated=true;break;}
+    paras+=line;charCount+=line.length;
+  }
+
+  let srcBlock=isTR
+    ?'SOURCE DOCUMENTS: None loaded. Focus on internal consistency and general GxP requirements.'
+    :'SOURCE DOCUMENTS: None loaded. Focus on internal consistency and general GxP requirements.';
+  if(srcs.length){
+    srcBlock='=== SOURCE DOCUMENTS ===\nFor every finding, check these sources. Cite section number + exact clause.\n\n';
+    srcBlock+=srcs.map((s,i)=>{const t=s.text.length>8000?s.text.slice(0,8000)+'\n[...truncated]':s.text;return '--- SOURCE '+(i+1)+': '+s.name+' ---\n'+t;}).join('\n\n');
+  }
+
+  const sys=`You are a senior GxP/ISO 13485/FDA quality document review expert with 20+ years in medical device QA. You have conducted hundreds of audits and technical file reviews across EU MDR, FDA, and ISO 13485 frameworks.
+
+STEP 1 — UNDERSTAND THE DOCUMENT:
+Determine the document type, purpose, applicable standards, and regulatory framework. Identify which source document clauses directly apply.
+
+STEP 2 — REGULATORY CONTEXT:
+${regContext[sel.reg]||regContext.ISO13485}
+Intensity: ${sel.int} — ${intDef[sel.int]||''}
+
+STEP 3 — CATEGORIZE FINDINGS (strict rules):
+
+GRAMMAR (severity=Minor): Spelling, grammar, sentence structure errors only.
+
+LOGIC (severity=Major|Minor): Internal document inconsistencies — contradictions between sections, broken cross-references, circular logic, unsupported claims.
+→ Major: Critical contradiction that undermines document validity
+→ Minor: Minor cross-reference error or ambiguity
+
+QA_GAP (severity=Critical|Major|Minor): Missing element that source procedure or standard explicitly requires.
+→ Critical: Makes validation/qualification invalid (missing acceptance criteria, wrong risk index, undefined scope)
+→ Major: Important gap that must be corrected (operator names blank, appendix referenced but missing)
+→ Minor: Best practice not met, not strictly mandatory
+
+TRACEABILITY (severity=Critical|Major) — USE ONLY when source documents are loaded:
+→ A source document requirement is not addressed in this document
+
+EVIDENCE (severity=Major): Undocumented claim or conclusion without objective evidence.
+
+SCOPE (severity=Major): Mismatch between stated scope and document content.
+
+OBSERVATION (severity=OBSERVATION) — Notified Body language:
+→ No non-conformity but warrants attention; explanation or improvement recommended
+→ Example: "Q10 value selected without material-specific justification"
+
+OFI (severity=OFI) — Opportunity for Improvement:
+→ No violation; quality/clarity could be enhanced
+
+STEP 4 — COMMENT QUALITY:
+Language: ${sel.lang} — ${(toneDef[sel.lang]||toneDef.English)[sel.tone]||''}
+Author: ${cfg.author||'QA Reviewer'}
+
+Bad comment: "This section is incomplete."
+Good comment: "Section 5.4 does not include documented statistical justification for the selected sample size. ISO 11607-2:2019 Clause 5.4 requires the rationale to link confidence level, reliability, and LTPD to the number of samples. Please add a reference to the statistical calculation in Appendix B."
+
+CRITICAL RULES:
+1. NEVER fabricate clause numbers, document titles, or regulatory references.
+2. Before stating something is missing, scan ALL lines [0] through [end].
+3. paragraphSnippet = exact first 40 chars of that line — do not modify.
+4. One finding per issue. If multiple issues in one paragraph, pick the most important.
+5. Only report genuine issues. No false positives.
+6. regulatoryRef format: "ISO 13485:2016 §7.5.6 / FDA 21 CFR 820.70(a)" — include ALL applicable standards for the finding.
+
+RETURN ONLY VALID JSON:
+{"summary":"Professional 3-4 sentence evaluation of document type, quality, and audit readiness","overallRisk":"Low|Medium|High","auditReadiness":"Not Ready|Needs Work|Mostly Ready|Audit Ready","findings":[{"id":"F-001","paragraphIndex":0,"paragraphSnippet":"exact first 40 chars","type":"GRAMMAR|LOGIC|QA_GAP|TRACEABILITY|EVIDENCE|SCOPE","severity":"Critical|Major|Minor|OBSERVATION|OFI","issue":"One sentence: exactly what is wrong","regulatoryRef":"Standard §X.X / 21 CFR 820.X","sourceRef":"Source doc name + clause or: Source evidence not found","sourceEvidence":"Exact or close quote from source — if none: explain general GxP basis","whyItMatters":"Regulatory and audit impact in 1-2 sentences","comment":"Word comment in correct language and tone. Include: what is wrong, why it matters (clause ref), what action is needed. 2-4 sentences.","trackChange":{"type":"replacement|none","originalText":"","suggestedText":""},"suggestedFix":"Concrete action: what to add/change/delete","correctedText":"Ready-to-paste GxP-formatted corrected text — only for trackChange findings"}]}`;
+
+  const usr=`DOCUMENT UNDER REVIEW: ${mainName}\nDocument metadata: Project="${document.getElementById('meta-doc').value||'—'}", Rev="${document.getElementById('meta-rev').value||'—'}", Company="${document.getElementById('meta-company').value||'—'}"\n\n=== DOCUMENT CONTENT ===\n${paras}\n\n${srcBlock}\n\nReturn ONLY JSON.`;
+
+  const resp=await fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+    body:JSON.stringify({model:'claude-opus-4-5',max_tokens:6000,system:sys,messages:[{role:'user',content:usr}]})
+  });
+  if(!resp.ok){const e=await resp.json().catch(()=>({}));if(resp.status===401)throw new Error('Invalid API key.');throw new Error(e.error?.message||'API error '+resp.status);}
+  const d=await resp.json();
+  const raw=d.content.filter(b=>b.type==='text').map(b=>b.text).join('');
+  const clean=raw.replace(/^```json\s*/i,'').replace(/^```\s*/i,'').replace(/\s*```$/i,'').trim();
+  return JSON.parse(clean);
+}
+
+// ── DOCX Comment Injection ─────────────────────────────────────────────────────
+async function injectComments(arrayBuffer,findings,author,initials){
+  const zip=await JSZip.loadAsync(arrayBuffer);
+  let docXml=await zip.file('word/document.xml').async('string');
+  let commXml='';const cf=zip.file('word/comments.xml');
+  if(cf)commXml=await cf.async('string');
+  else commXml='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:comments xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"></w:comments>';
+  let relsXml='';const rf=zip.file('word/_rels/document.xml.rels');if(rf)relsXml=await rf.async('string');
+  let ctXml=await zip.file('[Content_Types].xml').async('string');
+  const now=new Date().toISOString().replace(/\.\d+Z$/,'Z');
+  const allIds=[...docXml.matchAll(/w:id="(\d+)"/g),...commXml.matchAll(/w:id="(\d+)"/g)];
+  let cid=allIds.length?Math.max(...allIds.map(m=>parseInt(m[1]))):0;
+  const paraRx=/<w:p[\s>][\s\S]*?<\/w:p>/g;
+  const paras=[];let pm;
+  while((pm=paraRx.exec(docXml))!==null)paras.push({start:pm.index,end:pm.index+pm[0].length,xml:pm[0]});
+  function pText(xml){return xml.replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim();}
+  function xe(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');}
+  function findPara(idx,snippet){
+    const snip=(snippet||'').trim().toLowerCase().slice(0,20);
+    if(idx>=0&&idx<paras.length){const pt=pText(paras[idx].xml).toLowerCase();if(!snip||pt.includes(snip.slice(0,12)))return paras[idx];}
+    if(snip.length>=5){for(const p of paras){if(pText(p.xml).toLowerCase().includes(snip.slice(0,12)))return p;}}
+    if(idx>=0&&idx<paras.length)return paras[idx];
+    return paras[Math.min(Math.max(0,idx),paras.length-1)]||null;
+  }
+  const paraComments=new Map();
+  for(const f of findings){
+    if(!f.comment)continue;
+    const target=findPara(f.paragraphIndex||0,f.paragraphSnippet);
+    if(!target)continue;
+    if(!paraComments.has(target.start))paraComments.set(target.start,{target,findings:[]});
+    paraComments.get(target.start).findings.push(f);
+  }
+  const mods=[];const newComments=[];
+  for(const[,{target,findings:fList}]of paraComments){
+    // Build comment with regulatory ref prefix
+    const commentText=fList.map((f,i)=>{
+      const prefix=fList.length>1?'['+f.id+'] ':'';
+      const regNote=f.regulatoryRef?'\nRef: '+f.regulatoryRef:'';
+      return prefix+f.comment+regNote;
+    }).join('\n\n');
+    cid++;const cId=cid;
+    const cLines=xe(commentText).split('\n');
+    const cParas=cLines.map((line,i)=>'<w:p><w:pPr><w:pStyle w:val="CommentText"/></w:pPr>'+(i===0?'<w:r><w:rPr><w:rStyle w:val="CommentReference"/></w:rPr><w:t>'+cId+'</w:t></w:r>':'')+'<w:r><w:t xml:space="preserve">'+line+'</w:t></w:r></w:p>').join('');
+    newComments.push('<w:comment w:id="'+cId+'" w:author="'+xe(author)+'" w:date="'+now+'" w:initials="'+xe(initials)+'">'+cParas+'</w:comment>');
+    const tc=(fList.find(f=>f.trackChange&&f.trackChange.type&&f.trackChange.type!=='none'&&f.trackChange.originalText)||{}).trackChange||null;
+    let paraXml=target.xml;
+    if(tc&&tc.originalText&&tc.suggestedText){cid++;const rId=cid;const delXml='<w:del w:id="'+rId+'" w:author="'+xe(author)+'" w:date="'+now+'"><w:r><w:delText xml:space="preserve">'+xe(tc.originalText)+'</w:delText></w:r></w:del>';const insXml='<w:ins w:id="'+(rId+1)+'" w:author="'+xe(author)+'" w:date="'+now+'"><w:r><w:t xml:space="preserve">'+xe(tc.suggestedText)+'</w:t></w:r></w:ins>';const rx=new RegExp(xe(tc.originalText).replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i');if(rx.test(paraXml))paraXml=paraXml.replace(rx,delXml+insXml);}
+    const anchor='<w:commentRangeStart w:id="'+cId+'"/><w:commentRangeEnd w:id="'+cId+'"/><w:r><w:rPr><w:rStyle w:val="CommentReference"/></w:rPr><w:commentReference w:id="'+cId+'"/></w:r>';
+    paraXml=paraXml.replace('</w:p>',anchor+'</w:p>');
+    mods.push({start:target.start,end:target.end,newXml:paraXml});
+  }
+  mods.sort((a,b)=>b.start-a.start);
+  for(const m of mods)docXml=docXml.slice(0,m.start)+m.newXml+docXml.slice(m.end);
+  if(newComments.length)commXml=commXml.replace('</w:comments>',newComments.join('\n')+'</w:comments>');
+  if(relsXml&&!relsXml.includes('comments.xml')){relsXml=relsXml.replace('</Relationships>','<Relationship Id="rIdQAComm" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments" Target="comments.xml"/></Relationships>');zip.file('word/_rels/document.xml.rels',relsXml);}
+  if(!ctXml.includes('comments+xml')){ctXml=ctXml.replace('</Types>','<Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/></Types>');zip.file('[Content_Types].xml',ctXml);}
+  zip.file('word/document.xml',docXml);zip.file('word/comments.xml',commXml);
+  return zip.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',compression:'DEFLATE'});
+}
+
+// ── Render ─────────────────────────────────────────────────────────────────────
+function renderResults(r){
+  allFindings=r.findings||[];
+  const revId=document.getElementById('rev-id').textContent;
+  document.getElementById('ss-id').textContent=revId+' · '+new Date().toLocaleString('en-GB')+' · '+mainFile?.name;
+  document.getElementById('ss-text').textContent=r.summary||'';
+  const rM={High:['rb-H','HIGH RISK'],Medium:['rb-M','MEDIUM RISK'],Low:['rb-L','LOW RISK']};
+  const[rc,rl]=rM[r.overallRisk]||['rb-M','—'];
+  const rb=document.getElementById('risk-b');rb.className='risk-badge '+rc;rb.textContent=rl;
+  const rdM={'Not Ready':'rbadge-nr NOT READY','Needs Work':'rbadge-nw NEEDS WORK','Mostly Ready':'rbadge-mr MOSTLY READY','Audit Ready':'rbadge-ar AUDIT READY'};
+  const rdv=rdM[r.auditReadiness]||'rbadge-nw —';const[rdc,...rdl]=rdv.split(' ');
+  const rdb=document.getElementById('ready-b');rdb.className='ready-badge '+rdc;rdb.textContent=rdl.join(' ');
+  document.getElementById('st0').textContent=allFindings.length;
+  document.getElementById('st1').textContent=allFindings.filter(f=>f.severity==='Critical').length;
+  document.getElementById('st2').textContent=allFindings.filter(f=>f.severity==='Major').length;
+  document.getElementById('st3').textContent=allFindings.filter(f=>f.severity==='Minor').length;
+  document.getElementById('st4').textContent=allFindings.filter(f=>f.severity==='OBSERVATION').length;
+  document.getElementById('st5').textContent=allFindings.filter(f=>f.severity==='OFI').length;
+  const dlb=document.getElementById('dl-banner');
+  if(reviewedBlob){dlb.classList.remove('hidden');document.getElementById('dl-title').textContent=outName+' ready — '+allFindings.length+' comments injected';}
+  else dlb.classList.add('hidden');
+  document.getElementById('filter-wrap').classList.remove('hidden');
+  document.getElementById('bottom-actions').classList.remove('hidden');
+  document.getElementById('pr-count').textContent=allFindings.length+' findings';
+  renderList(allFindings);
+}
+
+function downloadDocx(){
+  if(!reviewedBlob)return;
+  const url=URL.createObjectURL(reviewedBlob);
+  const a=document.createElement('a');a.href=url;a.download=outName;a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),5000);
+}
+
+const SIC={Critical:'🔴',Major:'🟠',Minor:'🟡',Info:'ℹ',OBSERVATION:'🔵',OFI:'🟢'};
+const SBC={Critical:'sbC',Major:'sbM',Minor:'sbN',Info:'sbI',OBSERVATION:'sbObs',OFI:'sbOfi'};
+const SCC={Critical:'sC',Major:'sM',Minor:'sN',Info:'sI',OBSERVATION:'sObs',OFI:'sOfi'};
+
+function renderList(findings){
+  const el=document.getElementById('findings-list');
+  if(!findings.length){
+    el.innerHTML='<div style="text-align:center;padding:30px;font-size:12px;color:var(--mist2)">No findings for this filter.</div>';
+    return;
+  }
+  el.innerHTML=findings.map((f,i)=>`
+    <div class="fc ${SCC[f.severity]||'sI'}">
+      <div class="fc-hdr" onclick="togFC(${i})">
+        <div style="flex:1;min-width:0">
+          <div class="fc-badges">
+            <span class="sb ${SBC[f.severity]||'sbI'}">${SIC[f.severity]||'•'} ${esc(f.severity)}</span>
+            <span class="sb sb-type">${esc(f.type||'')}</span>
+          </div>
+          <div class="fc-title">${esc(f.issue||'Finding')}</div>
+          ${f.regulatoryRef?`<div style="margin-top:4px"><span class="reg-pill">${esc(f.regulatoryRef)}</span></div>`:''}
+        </div>
+        <div class="fc-chevron ${i===0?'open':''}" id="arr-${i}">▾</div>
+      </div>
+      <div class="fc-body ${i===0?'open':''}" id="fcb-${i}">
+
+        ${f.sourceEvidence&&!f.sourceEvidence.includes('not found')&&!f.sourceEvidence.includes('bulunamad')?`
+        <div class="fp">
+          <div class="fp-hdr" style="color:var(--teal)">
+            <span>📖 Source Evidence${f.sourceRef?' — '+esc(f.sourceRef):''}</span>
+          </div>
+          <div class="ev-block">${esc(f.sourceEvidence)}</div>
+        </div>`:''}
+
+        <div class="fp">
+          <div class="fp-hdr"><span>⚠ Issue</span></div>
+          <div class="fp-val">${esc(f.issue||'—')}</div>
+        </div>
+
+        ${f.whyItMatters?`<div class="fp">
+          <div class="fp-hdr"><span>⚖ Regulatory Impact</span></div>
+          <div class="fp-val" style="font-style:italic;color:var(--mist)">${esc(f.whyItMatters)}</div>
+        </div>`:''}
+
+        <div class="fp" style="background:rgba(26,86,219,.03)">
+          <div class="fp-hdr" style="color:var(--brand)">
+            <span>💬 Word Comment</span>
+            <button class="cpy" id="cc${i}" onclick="cpyT('cc${i}','${escJ(f.comment||'')}')">Copy</button>
+          </div>
+          <div class="cmnt-block">"${esc(f.comment||'—')}"</div>
+        </div>
+
+        ${f.suggestedFix?`<div class="fp">
+          <div class="fp-hdr" style="color:var(--emerald)"><span>🔧 Suggested Fix</span></div>
+          <div class="fix-block">${esc(f.suggestedFix)}</div>
+        </div>`:''}
+
+        ${f.correctedText?`<div class="fp">
+          <div class="fp-hdr" style="color:var(--violet)">
+            <span>✏ Corrected Text</span>
+            <button class="cpy" id="ct${i}" onclick="cpyT('ct${i}','${escJ(f.correctedText)}')">Copy</button>
+          </div>
+          <div class="code-block">${esc(f.correctedText)}</div>
+        </div>`:''}
+
+        ${f.trackChange?.type&&f.trackChange.type!=='none'&&f.trackChange.originalText?`
+        <div class="fp"><div class="fp-hdr" style="color:var(--teal)"><span>🔄 Track Change</span></div>
+          <div class="fp-val"><span class="tc-del">${esc(f.trackChange.originalText)}</span><span class="tc-ins">→ ${esc(f.trackChange.suggestedText)}</span></div>
+        </div>`:''}
+
+        <div class="fp" style="background:var(--fog3)">
+          <div class="fp-hdr"><span>Disposition</span></div>
+          <div class="disp-row">
+            <button class="disp-btn disp-accept ${(dispositions[f.id]||{}).status==='accepted'?'sel':''}" onclick="setDisp('${f.id}','accepted',${i})">✓ Accept</button>
+            <button class="disp-btn disp-reject ${(dispositions[f.id]||{}).status==='rejected'?'sel':''}" onclick="setDisp('${f.id}','rejected',${i})">✗ Reject</button>
+            <button class="disp-btn disp-defer ${(dispositions[f.id]||{}).status==='deferred'?'sel':''}" onclick="setDisp('${f.id}','deferred',${i})">⊙ Defer</button>
+            <input class="disp-note" id="note-${f.id}" placeholder="Add reviewer note…" value="${esc((dispositions[f.id]||{}).note||'')}" onblur="saveNote('${f.id}',this.value)">
+          </div>
+        </div>
+
+      </div>
+    </div>`).join('');
+  if(findings.length) document.getElementById('arr-0')?.classList.add('open');
+}
+
+function setDisp(fid,status,renderIdx){
+  if(!dispositions[fid])dispositions[fid]={};
+  dispositions[fid].status=dispositions[fid].status===status?null:status;
+  renderList(allFindings);
+  document.querySelectorAll('.flt.on,.chip.on').forEach(b=>b.click());
+}
+function saveNote(fid,val){
+  if(!dispositions[fid])dispositions[fid]={};
+  dispositions[fid].note=val;
+}
+
+function togFC(i){const b=document.getElementById('fcb-'+i);const a=document.getElementById('arr-'+i);if(!b)return;const o=b.classList.toggle('open');if(a)a.classList.toggle('open',o);}
+
+function flt(sev,btn){
+  document.querySelectorAll('.chip').forEach(b=>b.classList.remove('on'));btn.classList.add('on');
+  renderList(sev==='all'?allFindings:allFindings.filter(f=>f.severity===sev||f.type===sev));
+}
+
+async function cpyT(id,text){
+  const btn=document.getElementById(id);
+  try{await navigator.clipboard.writeText(text);}catch{const e=document.createElement('textarea');e.value=text;document.body.appendChild(e);e.select();document.execCommand('copy');document.body.removeChild(e);}
+  if(btn){btn.classList.add('ok');btn.textContent='✓';setTimeout(()=>{btn.classList.remove('ok');btn.textContent='Copy';},2000);}
+}
+
+function resetApp(){
+  allFindings=[];reviewedBlob=null;mainFile=null;mainDocxBuf=null;currentResult=null;
+  document.getElementById('dz-e').classList.remove('hidden');document.getElementById('dz-f').classList.add('hidden');
+  document.getElementById('dz').classList.remove('has');document.getElementById('doc-dot').classList.remove('active');
+  document.getElementById('inp-main').value='';
+  document.getElementById('res-section').classList.add('hidden');
+  document.getElementById('filter-wrap').classList.add('hidden');
+  document.getElementById('bottom-actions').classList.add('hidden');
+  document.getElementById('pr-count').textContent='—';
+  document.getElementById('findings-list').innerHTML='<div class="fc-empty"><div class="fc-empty-icon">🔎</div><p>Start a review to see findings here.</p></div>';
+  updateBtn();showErr('');generateReviewId();
+}
+
+// ── Report & History ──────────────────────────────────────────────────────────
+function openReport(){
+  if(!currentResult)return;
+  const date=new Date().toLocaleDateString('en-GB');
+  const revId=document.getElementById('rev-id').textContent;
+  const docName=document.getElementById('meta-doc').value||mainFile?.name||'—';
+  const rev=document.getElementById('meta-rev').value||'—';
+  const company=document.getElementById('meta-company').value||'—';
+
+  let lines=[
+    'QA DOCUMENT REVIEW REPORT',
+    '═'.repeat(50),
+    `Review ID     : ${revId}`,
+    `Date          : ${date}`,
+    `Reviewer      : ${cfg.author||'—'} (${cfg.initials||'—'})`,
+    `Organization  : ${company}`,
+    `Document      : ${docName}`,
+    `Revision      : ${rev}`,
+    `Source File   : ${mainFile?.name||'—'}`,
+    `Regulatory    : ${sel.reg} | Tone: ${sel.tone} | Lang: ${sel.lang}`,
+    '─'.repeat(50),
+    `Overall Risk  : ${currentResult.overallRisk}`,
+    `Audit Status  : ${currentResult.auditReadiness}`,
+    '',
+    'SUMMARY:',
+    currentResult.summary||'—',
+    '',
+    'FINDINGS MATRIX:',
+    `Critical: ${allFindings.filter(f=>f.severity==='Critical').length}  |  Major: ${allFindings.filter(f=>f.severity==='Major').length}  |  Minor: ${allFindings.filter(f=>f.severity==='Minor').length}  |  Observation: ${allFindings.filter(f=>f.severity==='OBSERVATION').length}  |  OFI: ${allFindings.filter(f=>f.severity==='OFI').length}`,
+    '═'.repeat(50),
+    '',
+  ];
+
+  allFindings.forEach((f,i)=>{
+    const disp=dispositions[f.id];
+    lines.push(`${f.id} [${f.severity}] [${f.type}]${disp?.status?' ['+disp.status.toUpperCase()+']':''}`)
+    lines.push(`Issue   : ${f.issue}`);
+    if(f.regulatoryRef)lines.push(`Reg.Ref : ${f.regulatoryRef}`);
+    if(f.sourceRef)lines.push(`Source  : ${f.sourceRef}`);
+    lines.push(`Snippet : ${f.paragraphSnippet}`);
+    lines.push(`Comment : ${f.comment}`);
+    if(f.suggestedFix)lines.push(`Fix     : ${f.suggestedFix}`);
+    if(disp?.note)lines.push(`Note    : ${disp.note}`);
+    lines.push('─'.repeat(40));
+  });
+
+  lines.push('');lines.push('END OF REPORT');
+  document.getElementById('report-preview').textContent=lines.join('\n');
+  document.getElementById('report-modal').classList.remove('hidden');
+}
+function closeReport(e){if(!e||e.target.id==='report-modal')document.getElementById('report-modal').classList.add('hidden');}
+function printReport(){window.print();}
+
+function exportCSV(){
+  const rows=[['ID','Severity','Type','Issue','Regulatory Ref','Source Ref','Snippet','Comment','Suggested Fix','Disposition','Note']];
+  allFindings.forEach(f=>{
+    const d=dispositions[f.id]||{};
+    rows.push([f.id,f.severity,f.type,f.issue,f.regulatoryRef||'',f.sourceRef||'',f.paragraphSnippet,f.comment,f.suggestedFix||'',d.status||'',d.note||''].map(v=>'"'+(v||'').replace(/"/g,'""')+'"'));
+  });
+  const csv=rows.map(r=>r.join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download='review_findings_'+document.getElementById('rev-id').textContent+'.csv';a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),3000);
+}
+
+function openHistory(){
+  const el=document.getElementById('hist-body');
+  if(!history.length){el.innerHTML='<div style="font-size:12px;color:var(--mist2);text-align:center;padding:20px">No review history yet.</div>';document.getElementById('hist-modal').classList.remove('hidden');return;}
+  el.innerHTML=history.map(h=>`
+    <div style="padding:10px 0;border-bottom:1px solid var(--fog)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">
+        <span style="font-size:11px;font-weight:600;font-family:'DM Mono',monospace;color:var(--ink3)">${h.id}</span>
+        <span style="font-size:10px;color:var(--mist2)">${new Date(h.date).toLocaleString('en-GB')}</span>
+      </div>
+      <div style="font-size:12px;color:var(--ink2);margin-bottom:2px">${h.docProject||h.docName||'—'}</div>
+      <div style="display:flex;gap:8px;font-size:10px;color:var(--mist2)">
+        <span>${h.findingCount} findings</span>
+        <span>Risk: ${h.risk||'—'}</span>
+        <span>${h.readiness||'—'}</span>
+      </div>
+    </div>`).join('');
+  document.getElementById('hist-modal').classList.remove('hidden');
+}
+function closeHistory(e){if(!e||e.target.id==='hist-modal')document.getElementById('hist-modal').classList.add('hidden');}
+
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+function escJ(s){return String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,'\\n').replace(/\r/g,'');}
+</script>
+</body>
+</html>
