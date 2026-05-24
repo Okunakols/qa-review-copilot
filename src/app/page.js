@@ -1,0 +1,634 @@
+'use client';
+
+import { useState, useEffect, useCallback, useRef } from 'react';
+import useReview from '../hooks/useReview';
+import Chrome from '../components/Chrome';
+import Sidebar from '../components/Sidebar';
+import FindingsPanel from '../components/FindingsPanel';
+import {
+  SettingsModal,
+  ReportModal,
+  HistoryModal,
+} from '../components/modals/Modals';
+import { readFileText } from '../lib/fileReader';
+import { fmtBytes } from '../lib/utils';
+import { ANALYSIS_STEPS, RISK_MAP, READINESS_MAP } from '../lib/constants';
+
+export default function Home() {
+  const r = useReview();
+  const {
+    apiKey,
+    mainFile,
+    findings,
+    reviewedBlob,
+    outName,
+    currentResult,
+    sources,
+    cfg,
+    history,
+    sel,
+    dispositions,
+    activeStep,
+    isReviewing,
+    error,
+    reviewComplete,
+    revId,
+    docMeta,
+    filterMode,
+    setMainFile,
+    saveApiKey,
+    loadApiKey,
+    clearApiKey,
+    updateCfg,
+    addSource,
+    removeSource,
+    toggleSource,
+    setSel,
+    setDisposition,
+    saveNote,
+    startReview,
+    downloadDocx,
+    exportReport,
+    exportCSV,
+    resetReview,
+    setFilterMode,
+    setError,
+    generateReviewId,
+  } = r;
+
+  const [showSettings, setShowSettings] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [showReport, setShowReport] = useState(false);
+  const [showSrcModal, setShowSrcModal] = useState(false);
+  const [srcModalFile, setSrcModalFile] = useState(null);
+  const [srcModalName, setSrcModalName] = useState('');
+  const [srcError, setSrcError] = useState('');
+  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [apiKeySaved, setApiKeySaved] = useState(false);
+
+  useEffect(() => {
+    loadApiKey();
+  }, [loadApiKey]);
+
+  useEffect(() => {
+    setApiKeySaved(!!apiKey);
+  }, [apiKey]);
+
+  const handleApiKeySave = useCallback(() => {
+    if (saveApiKey(apiKeyInput)) {
+      setApiKeySaved(true);
+      setApiKeyInput('');
+    }
+  }, [saveApiKey, apiKeyInput]);
+
+  const handleMainFile = useCallback(
+    e => {
+      const f = e.target?.files?.[0] || e;
+      if (f) setMainFile(f);
+    },
+    [setMainFile]
+  );
+
+  const handleDrop = useCallback(
+    e => {
+      e.preventDefault();
+      const f = e.dataTransfer?.files?.[0];
+      if (f) setMainFile(f);
+    },
+    [setMainFile]
+  );
+
+  const handleSrcFileSelect = useCallback(e => {
+    const f = e.target?.files?.[0];
+    if (f) {
+      setSrcModalFile(f);
+      setSrcModalName(prev => prev || f.name.replace(/\.[^.]+$/, ''));
+    }
+  }, []);
+
+  const handleAddSource = useCallback(async () => {
+    if (!srcModalFile) return;
+    setSrcError('');
+    try {
+      const text = await readFileText(srcModalFile);
+      if (!text.trim()) throw new Error('No text found in file.');
+      const id =
+        's' + Date.now() + Math.random().toString(36).slice(2, 5);
+      addSource({
+        id,
+        name: srcModalName || srcModalFile.name,
+        fileName: srcModalFile.name,
+        type: srcModalFile.name.split('.').pop().toUpperCase(),
+        addedAt: new Date().toISOString(),
+        active: true,
+        words: text.split(/\s+/).filter(Boolean).length,
+        text,
+      });
+      setShowSrcModal(false);
+      setSrcModalFile(null);
+      setSrcModalName('');
+    } catch (err) {
+      setSrcError(err.message);
+    }
+  }, [srcModalFile, srcModalName, addSource]);
+
+  // Risk and readiness from current result
+  const riskBadge = currentResult
+    ? RISK_MAP[currentResult.overallRisk] || ['rb-M', '\u2014']
+    : null;
+  const readinessStr = currentResult
+    ? READINESS_MAP[currentResult.auditReadiness] || 'rbadge-nw \u2014'
+    : null;
+
+  const stats = {
+    total: findings.length,
+    critical: findings.filter(f => f.severity === 'Critical').length,
+    high: findings.filter(f => f.severity === 'High').length,
+    medium: findings.filter(f => f.severity === 'Medium').length,
+    low: findings.filter(f => f.severity === 'Low').length,
+    observation: findings.filter(f => f.severity === 'OBSERVATION').length,
+    ofi: findings.filter(f => f.severity === 'OFI').length,
+  };
+
+  return (
+    <>
+      <Chrome
+        revId={revId}
+        cfg={cfg}
+        onSettings={() => setShowSettings(true)}
+        onHistory={() => setShowHistory(true)}
+      />
+
+      <div className="workspace">
+        <Sidebar
+          sources={sources}
+          onToggle={toggleSource}
+          onDelete={removeSource}
+          onAdd={() => setShowSrcModal(true)}
+          srcModalFile={srcModalFile}
+          srcModalName={srcModalName}
+          onSrcNameChange={setSrcModalName}
+          onFileSelect={handleSrcFileSelect}
+          onAddSource={handleAddSource}
+          srcError={srcError}
+          showSrcModal={showSrcModal}
+          onCloseSrcModal={() => {
+            setShowSrcModal(false);
+            setSrcModalFile(null);
+            setSrcModalName('');
+            setSrcError('');
+          }}
+        />
+
+        {/* MAIN */}
+        <div className="main">
+          {/* Metadata bar */}
+          <div className="meta-bar">
+            <div className="meta-field">
+              <span className="meta-lbl">Project / Document</span>
+              <input
+                className="meta-inp"
+                placeholder="e.g. SBSVP-2025-001 SBS Validation Plan"
+                value={docMeta.project}
+                onChange={e =>
+                  r.setDocMeta(prev => ({ ...prev, project: e.target.value }))
+                }
+              />
+            </div>
+            <div className="meta-divider" />
+            <div className="meta-field" style={{ maxWidth: 100 }}>
+              <span className="meta-lbl">Revision</span>
+              <input
+                className="meta-inp"
+                placeholder="Rev 00"
+                value={docMeta.revision}
+                onChange={e =>
+                  r.setDocMeta(prev => ({ ...prev, revision: e.target.value }))
+                }
+              />
+            </div>
+            <div className="meta-divider" />
+            <div className="meta-field" style={{ maxWidth: 120 }}>
+              <span className="meta-lbl">Company</span>
+              <input
+                className="meta-inp"
+                placeholder="MedTech Inc."
+                value={docMeta.company}
+                onChange={e =>
+                  r.setDocMeta(prev => ({ ...prev, company: e.target.value }))
+                }
+              />
+            </div>
+            <div className="meta-divider" />
+            <div className="meta-field" style={{ maxWidth: 110 }}>
+              <span className="meta-lbl">Date</span>
+              <input
+                className="meta-inp"
+                type="date"
+                value={docMeta.date}
+                onChange={e =>
+                  r.setDocMeta(prev => ({ ...prev, date: e.target.value }))
+                }
+              />
+            </div>
+          </div>
+
+          {/* API Key strip */}
+          {!apiKeySaved ? (
+            <div className="ak-strip">
+              <div className="ak-ico">&#128273;</div>
+              <div className="ak-body">
+                <div className="ak-title">AI Engine API Key</div>
+                <div className="ak-sub">
+                  Enter your API key. Stored in session memory only &mdash;
+                  never transmitted or logged.
+                </div>
+                <div className="ak-row">
+                  <input
+                    className="ak-inp"
+                    type="password"
+                    placeholder="Enter API key\u2026"
+                    value={apiKeyInput}
+                    onChange={e => setApiKeyInput(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleApiKeySave()}
+                  />
+                  <button className="ak-save" onClick={handleApiKeySave}>
+                    Authenticate
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="ak-strip ok">
+              <div className="ak-ico" style={{ background: 'rgba(34,197,94,.15)' }}>
+                &#9989;
+              </div>
+              <div className="ak-body">
+                <div className="ak-ok-row">
+                  <div className="ak-ok-dot" />
+                  <span className="ak-ok-txt">API key authenticated</span>
+                  <span
+                    className="ak-chg"
+                    onClick={() => {
+                      clearApiKey();
+                      setApiKeySaved(false);
+                    }}
+                  >
+                    Change
+                  </span>
+                </div>
+                <div className="ak-sub" style={{ marginTop: 3 }}>
+                  Ready to analyze documents
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Error */}
+          {error && (
+            <div className="err-card">
+              <span>&#9888;</span>
+              <span>{error}</span>
+            </div>
+          )}
+
+          {/* Drop zone */}
+          <div className="dropcard">
+            <div className="dropcard-h">
+              <div
+                className={`dch-dot ${mainFile ? 'active' : ''}`}
+                id="doc-dot"
+              />
+              <span className="dch-title">Primary Document</span>
+              <span className="dch-sub">.docx &middot; .pdf &middot; .txt &middot; max 10MB</span>
+            </div>
+            <div
+              className={`dz ${mainFile ? 'has' : ''}`}
+              onClick={() => document.getElementById('inp-main').click()}
+              onDragOver={e => {
+                e.preventDefault();
+                e.currentTarget.classList.add('over');
+              }}
+              onDragLeave={e => e.currentTarget.classList.remove('over')}
+              onDrop={handleDrop}
+            >
+              {!mainFile ? (
+                <div>
+                  <span className="dz-icon">&#128228;</span>
+                  <div className="dz-title">
+                    Drop document here or click to browse
+                  </div>
+                  <div className="dz-sub">
+                    Supports Word, PDF (text-based), and plain text
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <span className="dz-icon">&#128196;</span>
+                  <div className="dz-name">{mainFile.name}</div>
+                  <div className="dz-sub">{fmtBytes(mainFile.size)}</div>
+                  <button
+                    className="dz-rm"
+                    onClick={e => {
+                      e.stopPropagation();
+                      setMainFile(null);
+                    }}
+                  >
+                    Remove
+                  </button>
+                </div>
+              )}
+            </div>
+            <input
+              type="file"
+              id="inp-main"
+              accept=".docx,.pdf,.txt"
+              style={{ display: 'none' }}
+              onChange={handleMainFile}
+            />
+          </div>
+
+          {/* Review config */}
+          <div className="config-card">
+            <div
+              style={{
+                padding: '11px 14px',
+                borderBottom: '1px solid var(--fog)',
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: 'var(--ink3)',
+                }}
+              >
+                Review Configuration
+              </span>
+            </div>
+            <div className="config-grid">
+              <div className="config-col">
+                <span className="cfg-lbl">Language</span>
+                <div className="segs">
+                  {[
+                    { v: 'Turkish', label: '\uD83C\uDDF9\uD83C\uDDF7 Turkish' },
+                    { v: 'English', label: '\uD83C\uDDFA\uD83C\uDDF8 English' },
+                  ].map(o => (
+                    <button
+                      key={o.v}
+                      className={`seg ${sel.lang === o.v ? 'on' : ''}`}
+                      onClick={() => setSel(prev => ({ ...prev, lang: o.v }))}
+                    >
+                      <span className="seg-dot" />
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="config-col">
+                <span className="cfg-lbl">Comment Tone</span>
+                <div className="segs">
+                  {[
+                    { v: 'Formal', label: 'Formal / Audit' },
+                    { v: 'Simple', label: 'Simple' },
+                    { v: 'Friendly', label: 'Friendly' },
+                  ].map(o => (
+                    <button
+                      key={o.v}
+                      className={`seg ${sel.tone === o.v ? 'on' : ''}`}
+                      onClick={() => setSel(prev => ({ ...prev, tone: o.v }))}
+                    >
+                      <span className="seg-dot" />
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="config-col">
+                <span className="cfg-lbl">Regulatory</span>
+                <div className="segs">
+                  {[
+                    { v: 'ISO13485', label: 'ISO 13485' },
+                    { v: 'EUMDR', label: 'EU MDR' },
+                    { v: 'FDA', label: 'FDA 21 CFR' },
+                    { v: 'ALL', label: 'All Pathways' },
+                  ].map(o => (
+                    <button
+                      key={o.v}
+                      className={`seg ${sel.reg === o.v ? 'on' : ''}`}
+                      onClick={() => setSel(prev => ({ ...prev, reg: o.v }))}
+                    >
+                      <span className="seg-dot" />
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="config-col">
+                <span className="cfg-lbl">Intensity</span>
+                <div className="segs">
+                  {[
+                    { v: 'Light', label: 'Light' },
+                    { v: 'Standard', label: 'Standard' },
+                    { v: 'Strict', label: 'Strict / Audit' },
+                  ].map(o => (
+                    <button
+                      key={o.v}
+                      className={`seg ${sel.int === o.v ? 'on' : ''}`}
+                      onClick={() => setSel(prev => ({ ...prev, int: o.v }))}
+                    >
+                      <span className="seg-dot" />
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Status / loading */}
+          {isReviewing && (
+            <div className="status-card">
+              <div
+                style={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: 'var(--ink3)',
+                  marginBottom: 10,
+                }}
+              >
+                Analysis in progress&hellip;
+              </div>
+              <div className="status-steps">
+                {ANALYSIS_STEPS.map((s, i) => {
+                  const idx = ANALYSIS_STEPS.findIndex(
+                    x => x.id === activeStep
+                  );
+                  const sIdx = ANALYSIS_STEPS.findIndex(
+                    x => x.id === s.id
+                  );
+                  let cls = '';
+                  let icon = i + 1;
+                  if (sIdx < idx) {
+                    cls = 'done';
+                    icon = '\u2713';
+                  } else if (sIdx === idx) {
+                    cls = 'active';
+                    icon = '\u25CF';
+                  }
+                  return (
+                    <div key={s.id} className={`step-row ${cls}`}>
+                      <div className={`step-icon ${cls}`}>{icon}</div>
+                      <span className="step-line">{s.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* CTA */}
+          <div className="cta-zone">
+            <button
+              className="btn-review"
+              disabled={!mainFile || !apiKey || isReviewing}
+              onClick={startReview}
+            >
+              &#9654; &nbsp; Start AI Review
+            </button>
+            <div className="privacy">
+              &#128274; Documents are not stored on any server. Content is
+              processed by AI engine for analysis only. Output:{' '}
+              <strong>FileName_reviewed.docx</strong> &mdash; original
+              untouched, comments injected into copy.
+            </div>
+          </div>
+
+          {/* Results section */}
+          {reviewComplete && currentResult && (
+            <div className="res-section">
+              <div className="summary-strip">
+                <div className="ss-top">
+                  <div>
+                    <div className="ss-title">Review Complete</div>
+                    <div className="ss-id">
+                      {revId} &middot;{' '}
+                      {new Date().toLocaleString('en-GB')} &middot;{' '}
+                      {mainFile?.name}
+                    </div>
+                  </div>
+                  <div className="ss-badges">
+                    {riskBadge && (
+                      <span
+                        className={`risk-badge ${riskBadge[0]}`}
+                      >
+                        {riskBadge[1]}
+                      </span>
+                    )}
+                    {readinessStr && (() => {
+                      const [cls, ...lbl] = readinessStr.split(' ');
+                      return (
+                        <span className={`ready-badge ${cls}`}>
+                          {lbl.join(' ')}
+                        </span>
+                      );
+                    })()}
+                  </div>
+                </div>
+                <div className="ss-text">{currentResult.summary || ''}</div>
+              </div>
+
+              <div className="stats-row">
+                <div className="stat">
+                  <div className="stat-v sv0">{stats.total}</div>
+                  <div className="stat-l">Total</div>
+                </div>
+                <div className="stat">
+                  <div className="stat-v sv1">{stats.critical}</div>
+                  <div className="stat-l">Critical</div>
+                </div>
+                <div className="stat">
+                  <div className="stat-v sv2h">{stats.high}</div>
+                  <div className="stat-l">High</div>
+                </div>
+                <div className="stat">
+                  <div className="stat-v sv2">{stats.medium}</div>
+                  <div className="stat-l">Medium</div>
+                </div>
+                <div className="stat">
+                  <div className="stat-v sv3">{stats.low}</div>
+                  <div className="stat-l">Low</div>
+                </div>
+                <div className="stat">
+                  <div className="stat-v sv4">{stats.observation}</div>
+                  <div className="stat-l">Obs.</div>
+                </div>
+              </div>
+
+              {reviewedBlob && (
+                <div className="dl-banner">
+                  <div className="dl-ico">&#128196;</div>
+                  <div className="dl-info">
+                    <div className="dl-title">
+                      {outName} ready &mdash; {findings.length} comments
+                      injected
+                    </div>
+                    <div className="dl-sub">
+                      All findings injected as Word Comments. Track Changes
+                      applied where applicable.
+                    </div>
+                  </div>
+                  <button className="btn-dl" onClick={downloadDocx}>
+                    &#11015; Download .docx
+                  </button>
+                  <button className="btn-report" onClick={() => setShowReport(true)}>
+                    &#128202; Export Report
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <FindingsPanel
+          findings={findings}
+          dispositions={dispositions}
+          filterMode={filterMode}
+          onSetDisp={setDisposition}
+          onSaveNote={saveNote}
+          onSetFilter={setFilterMode}
+          onReset={resetReview}
+        />
+      </div>
+
+      <SettingsModal
+        show={showSettings}
+        cfg={cfg}
+        onClose={() => setShowSettings(false)}
+        onSave={newCfg => {
+          updateCfg(newCfg);
+          setShowSettings(false);
+        }}
+      />
+
+      <ReportModal
+        show={showReport}
+        onClose={() => setShowReport(false)}
+        currentResult={currentResult}
+        findings={findings}
+        dispositions={dispositions}
+        cfg={cfg}
+        docMeta={docMeta}
+        sel={sel}
+        mainFile={mainFile}
+        revId={revId}
+      />
+
+      <HistoryModal
+        show={showHistory}
+        history={history}
+        onClose={() => setShowHistory(false)}
+      />
+    </>
+  );
+}
