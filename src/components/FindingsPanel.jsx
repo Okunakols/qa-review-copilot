@@ -1,6 +1,6 @@
 'use client';
 
-import { escHtml, escJs } from '../lib/utils';
+import { useState } from 'react';
 import {
   SEVERITY_ICONS,
   SEVERITY_BADGE_CLASSES,
@@ -8,7 +8,7 @@ import {
   FINDING_TYPE_LABELS,
 } from '../lib/constants';
 
-function FindingCard({ f, index, disposition, onSetDisp, onSaveNote }) {
+function FindingCard({ f, isOpen, onToggle, disposition, onSetDisp, onSaveNote }) {
   const sevIcon = SEVERITY_ICONS[f.severity] || '\u2022';
   const sevBadge = SEVERITY_BADGE_CLASSES[f.severity] || 'sbI';
   const sevCard = SEVERITY_CARD_CLASSES[f.severity] || 'sI';
@@ -21,17 +21,7 @@ function FindingCard({ f, index, disposition, onSetDisp, onSaveNote }) {
 
   return (
     <div className={`fc ${sevCard}`}>
-      <div
-        className="fc-hdr"
-        onClick={() => {
-          const b = document.getElementById('fcb-' + index);
-          const a = document.getElementById('arr-' + index);
-          if (b) {
-            const o = b.classList.toggle('open');
-            if (a) a.classList.toggle('open', o);
-          }
-        }}
-      >
+      <div className="fc-hdr" onClick={onToggle}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="fc-badges">
             <span className={`sb ${sevBadge}`}>
@@ -49,244 +39,241 @@ function FindingCard({ f, index, disposition, onSetDisp, onSaveNote }) {
             </div>
           )}
         </div>
-        <div
-          className="fc-chevron"
-          id={'arr-' + index}
-        >
+        <div className={`fc-chevron ${isOpen ? 'open' : ''}`}>
           &#9662;
         </div>
       </div>
-      <div className="fc-body" id={'fcb-' + index} style={{ display: 'none' }}>
-        {/* Location */}
-        {f.location && (
-          <div className="fp">
-            <div className="fp-hdr">
-              <span>&#128205; Location</span>
-            </div>
-            <div className="fp-val" style={{ fontFamily: "'DM Mono', monospace" }}>
-              {f.location}
-            </div>
-          </div>
-        )}
-
-        {/* Source Evidence */}
-        {hasSourceEvidence && (
-          <div className="fp">
-            <div className="fp-hdr" style={{ color: 'var(--teal)' }}>
-              <span>
-                &#128214; Source Evidence
-                {f.sourceRef ? ' \u2014 ' + f.sourceRef : ''}
-              </span>
-            </div>
-            <div className="ev-block">{f.sourceEvidence}</div>
-          </div>
-        )}
-
-        {/* Issue */}
-        <div className="fp">
-          <div className="fp-hdr">
-            <span>&#9888; Issue</span>
-          </div>
-          <div className="fp-val">{f.issue || '\u2014'}</div>
-        </div>
-
-        {/* Audit Risk */}
-        {f.auditRisk && (
-          <div className="fp" style={{ background: 'var(--red-tint)' }}>
-            <div className="fp-hdr" style={{ color: 'var(--red)' }}>
-              <span>&#9888; Audit Risk</span>
-            </div>
-            <div className="fp-val" style={{ color: 'var(--red)', fontStyle: 'italic' }}>
-              {f.auditRisk}
-            </div>
-          </div>
-        )}
-
-        {/* Regulatory Impact */}
-        {f.whyItMatters && (
-          <div className="fp">
-            <div className="fp-hdr">
-              <span>&#9878; Regulatory Impact</span>
-            </div>
-            <div
-              className="fp-val"
-              style={{ fontStyle: 'italic', color: 'var(--mist)' }}
-            >
-              {f.whyItMatters}
-            </div>
-          </div>
-        )}
-
-        {/* Confidence */}
-        {f.confidence != null && (
-          <div className="fp" style={{ paddingBottom: 6 }}>
-            <div className="fp-hdr">
-              <span>Confidence</span>
-              <span
-                style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color:
-                    f.confidence >= 80
-                      ? 'var(--emerald)'
-                      : f.confidence >= 50
-                        ? 'var(--amber)'
-                        : 'var(--red)',
-                }}
-              >
-                {f.confidence}%
-              </span>
-            </div>
-            <div
-              style={{
-                height: 4,
-                background: 'var(--fog)',
-                borderRadius: 2,
-                overflow: 'hidden',
-              }}
-            >
-              <div
-                style={{
-                  height: '100%',
-                  width: f.confidence + '%',
-                  background:
-                    f.confidence >= 80
-                      ? 'var(--emerald)'
-                      : f.confidence >= 50
-                        ? 'var(--amber)'
-                        : 'var(--red)',
-                  borderRadius: 2,
-                  transition: 'width 0.3s',
-                }}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Word Comment */}
-        <div className="fp" style={{ background: 'rgba(26,86,219,.03)' }}>
-          <div className="fp-hdr" style={{ color: 'var(--brand)' }}>
-            <span>&#128172; Word Comment</span>
-            <button
-              className="cpy"
-              onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(f.comment || '');
-                } catch {
-                  /* fallback */
-                }
-              }}
-            >
-              Copy
-            </button>
-          </div>
-          <div className="cmnt-block">&ldquo;{f.comment || '\u2014'}&rdquo;</div>
-        </div>
-
-        {/* Suggested Fix */}
-        {f.suggestedFix && (
-          <div className="fp">
-            <div className="fp-hdr" style={{ color: 'var(--emerald)' }}>
-              <span>&#128295; Suggested Fix</span>
-            </div>
-            <div className="fix-block">{f.suggestedFix}</div>
-          </div>
-        )}
-
-        {/* Suggested Correction */}
-        {f.suggestedCorrection && (
-          <div className="fp">
-            <div className="fp-hdr" style={{ color: 'var(--emerald)' }}>
-              <span>&#9998; Suggested Correction</span>
-              <button
-                className="cpy"
-                onClick={async () => {
-                  try {
-                    await navigator.clipboard.writeText(f.suggestedCorrection);
-                  } catch {
-                    /* fallback */
-                  }
-                }}
-              >
-                Copy
-              </button>
-            </div>
-            <div className="fix-block">{f.suggestedCorrection}</div>
-          </div>
-        )}
-
-        {/* Corrected Text */}
-        {f.correctedText && (
-          <div className="fp">
-            <div className="fp-hdr" style={{ color: 'var(--violet)' }}>
-              <span>&#9998; Corrected Text</span>
-              <button
-                className="cpy"
-                onClick={async () => {
-                  try {
-                    await navigator.clipboard.writeText(f.correctedText);
-                  } catch {
-                    /* fallback */
-                  }
-                }}
-              >
-                Copy
-              </button>
-            </div>
-            <div className="code-block">{f.correctedText}</div>
-          </div>
-        )}
-
-        {/* Track Change */}
-        {f.trackChange?.type &&
-          f.trackChange.type !== 'none' &&
-          f.trackChange.originalText && (
+      {isOpen && (
+        <div className="fc-body open">
+          {/* Location */}
+          {f.location && (
             <div className="fp">
-              <div className="fp-hdr" style={{ color: 'var(--teal)' }}>
-                <span>&#128260; Track Change</span>
+              <div className="fp-hdr">
+                <span>Location</span>
               </div>
-              <div className="fp-val">
-                <span className="tc-del">{f.trackChange.originalText}</span>
-                <span className="tc-ins">
-                  &rarr; {f.trackChange.suggestedText}
-                </span>
+              <div className="fp-val" style={{ fontFamily: "'DM Mono', monospace" }}>
+                {f.location}
               </div>
             </div>
           )}
 
-        {/* Disposition */}
-        <div className="fp" style={{ background: 'var(--fog3)' }}>
-          <div className="fp-hdr">
-            <span>Disposition</span>
+          {/* Source Evidence */}
+          {hasSourceEvidence && (
+            <div className="fp">
+              <div className="fp-hdr" style={{ color: 'var(--teal)' }}>
+                <span>
+                  Source Evidence
+                  {f.sourceRef ? ' \u2014 ' + f.sourceRef : ''}
+                </span>
+              </div>
+              <div className="ev-block">{f.sourceEvidence}</div>
+            </div>
+          )}
+
+          {/* Issue */}
+          <div className="fp">
+            <div className="fp-hdr">
+              <span>Issue</span>
+            </div>
+            <div className="fp-val">{f.issue || '\u2014'}</div>
           </div>
-          <div className="disp-row">
-            <button
-              className={`disp-btn disp-accept ${disposition?.status === 'accepted' ? 'sel' : ''}`}
-              onClick={() => onSetDisp(f.id, 'accepted')}
-            >
-              &#10003; Accept
-            </button>
-            <button
-              className={`disp-btn disp-reject ${disposition?.status === 'rejected' ? 'sel' : ''}`}
-              onClick={() => onSetDisp(f.id, 'rejected')}
-            >
-              &#10007; Reject
-            </button>
-            <button
-              className={`disp-btn disp-defer ${disposition?.status === 'deferred' ? 'sel' : ''}`}
-              onClick={() => onSetDisp(f.id, 'deferred')}
-            >
-              &#8857; Defer
-            </button>
-            <input
-              className="disp-note"
-              placeholder="Add reviewer note\u2026"
-              defaultValue={disposition?.note || ''}
-              onBlur={e => onSaveNote(f.id, e.target.value)}
-            />
+
+          {/* Audit Risk */}
+          {f.auditRisk && (
+            <div className="fp" style={{ background: 'var(--red-tint)' }}>
+              <div className="fp-hdr" style={{ color: 'var(--red)' }}>
+                <span>Audit Risk</span>
+              </div>
+              <div className="fp-val" style={{ color: 'var(--red)', fontStyle: 'italic' }}>
+                {f.auditRisk}
+              </div>
+            </div>
+          )}
+
+          {/* Regulatory Impact */}
+          {f.whyItMatters && (
+            <div className="fp">
+              <div className="fp-hdr">
+                <span>Regulatory Impact</span>
+              </div>
+              <div
+                className="fp-val"
+                style={{ fontStyle: 'italic', color: 'var(--mist)' }}
+              >
+                {f.whyItMatters}
+              </div>
+            </div>
+          )}
+
+          {/* Confidence */}
+          {f.confidence != null && (
+            <div className="fp" style={{ paddingBottom: 6 }}>
+              <div className="fp-hdr">
+                <span>Confidence</span>
+                <span
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color:
+                      f.confidence >= 80
+                        ? 'var(--emerald)'
+                        : f.confidence >= 50
+                          ? 'var(--amber)'
+                          : 'var(--red)',
+                  }}
+                >
+                  {f.confidence}%
+                </span>
+              </div>
+              <div
+                style={{
+                  height: 4,
+                  background: 'var(--fog)',
+                  borderRadius: 2,
+                  overflow: 'hidden',
+                }}
+              >
+                <div
+                  style={{
+                    height: '100%',
+                    width: f.confidence + '%',
+                    background:
+                      f.confidence >= 80
+                        ? 'var(--emerald)'
+                        : f.confidence >= 50
+                          ? 'var(--amber)'
+                          : 'var(--red)',
+                    borderRadius: 2,
+                    transition: 'width 0.3s',
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Word Comment */}
+          <div className="fp" style={{ background: 'rgba(26,86,219,.03)' }}>
+            <div className="fp-hdr" style={{ color: 'var(--brand)' }}>
+              <span>Word Comment</span>
+              <button
+                className="cpy"
+                onClick={async e => {
+                  e.stopPropagation();
+                  try {
+                    await navigator.clipboard.writeText(f.comment || '');
+                  } catch {}
+                }}
+              >
+                Copy
+              </button>
+            </div>
+            <div className="cmnt-block">&ldquo;{f.comment || '\u2014'}&rdquo;</div>
+          </div>
+
+          {/* Suggested Fix */}
+          {f.suggestedFix && (
+            <div className="fp">
+              <div className="fp-hdr" style={{ color: 'var(--emerald)' }}>
+                <span>Suggested Fix</span>
+              </div>
+              <div className="fix-block">{f.suggestedFix}</div>
+            </div>
+          )}
+
+          {/* Suggested Correction */}
+          {f.suggestedCorrection && (
+            <div className="fp">
+              <div className="fp-hdr" style={{ color: 'var(--emerald)' }}>
+                <span>Suggested Correction</span>
+                <button
+                  className="cpy"
+                  onClick={async e => {
+                    e.stopPropagation();
+                    try {
+                      await navigator.clipboard.writeText(f.suggestedCorrection);
+                    } catch {}
+                  }}
+                >
+                  Copy
+                </button>
+              </div>
+              <div className="fix-block">{f.suggestedCorrection}</div>
+            </div>
+          )}
+
+          {/* Corrected Text */}
+          {f.correctedText && (
+            <div className="fp">
+              <div className="fp-hdr" style={{ color: 'var(--violet)' }}>
+                <span>Corrected Text</span>
+                <button
+                  className="cpy"
+                  onClick={async e => {
+                    e.stopPropagation();
+                    try {
+                      await navigator.clipboard.writeText(f.correctedText);
+                    } catch {}
+                  }}
+                >
+                  Copy
+                </button>
+              </div>
+              <div className="code-block">{f.correctedText}</div>
+            </div>
+          )}
+
+          {/* Track Change */}
+          {f.trackChange?.type &&
+            f.trackChange.type !== 'none' &&
+            f.trackChange.originalText && (
+              <div className="fp">
+                <div className="fp-hdr" style={{ color: 'var(--teal)' }}>
+                  <span>Track Change</span>
+                </div>
+                <div className="fp-val">
+                  <span className="tc-del">{f.trackChange.originalText}</span>
+                  <span className="tc-ins">
+                    &rarr; {f.trackChange.suggestedText}
+                  </span>
+                </div>
+              </div>
+            )}
+
+          {/* Disposition */}
+          <div className="fp" style={{ background: 'var(--fog3)' }}>
+            <div className="fp-hdr">
+              <span>Disposition</span>
+            </div>
+            <div className="disp-row">
+              <button
+                className={`disp-btn disp-accept ${disposition?.status === 'accepted' ? 'sel' : ''}`}
+                onClick={e => { e.stopPropagation(); onSetDisp(f.id, 'accepted'); }}
+              >
+                Accept
+              </button>
+              <button
+                className={`disp-btn disp-reject ${disposition?.status === 'rejected' ? 'sel' : ''}`}
+                onClick={e => { e.stopPropagation(); onSetDisp(f.id, 'rejected'); }}
+              >
+                Reject
+              </button>
+              <button
+                className={`disp-btn disp-defer ${disposition?.status === 'deferred' ? 'sel' : ''}`}
+                onClick={e => { e.stopPropagation(); onSetDisp(f.id, 'deferred'); }}
+              >
+                Defer
+              </button>
+              <input
+                className="disp-note"
+                placeholder="Add reviewer note..."
+                defaultValue={disposition?.note || ''}
+                onBlur={e => { e.stopPropagation(); onSaveNote(f.id, e.target.value); }}
+                onClick={e => e.stopPropagation()}
+              />
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -300,6 +287,8 @@ export default function FindingsPanel({
   onSetFilter,
   onReset,
 }) {
+  const [openCard, setOpenCard] = useState(0);
+
   const filtered =
     filterMode === 'all'
       ? findings
@@ -309,12 +298,12 @@ export default function FindingsPanel({
 
   const filterChips = [
     { key: 'all', label: 'All' },
-    { key: 'Critical', label: '\uD83D\uDD34 Critical' },
-    { key: 'High', label: '\uD83D\uDD35 High' },
-    { key: 'Medium', label: '\uD83D\uDFE1 Medium' },
-    { key: 'Low', label: '\uD83D\uDFE2 Low' },
-    { key: 'OBSERVATION', label: '\uD83D\uDD35 Obs.' },
-    { key: 'OFI', label: '\uD83D\uDFE2 OFI' },
+    { key: 'Critical', label: 'Critical' },
+    { key: 'High', label: 'High' },
+    { key: 'Medium', label: 'Medium' },
+    { key: 'Low', label: 'Low' },
+    { key: 'OBSERVATION', label: 'Obs.' },
+    { key: 'OFI', label: 'OFI' },
     { key: 'TRACEABILITY', label: 'Trace' },
     { key: 'ACCEPTANCE_CRITERIA', label: 'Acc. Criteria' },
     { key: 'EVIDENCE', label: 'Evidence' },
@@ -384,7 +373,8 @@ export default function FindingsPanel({
             <FindingCard
               key={f.id || i}
               f={f}
-              index={i}
+              isOpen={openCard === i}
+              onToggle={() => setOpenCard(openCard === i ? -1 : i)}
               disposition={dispositions[f.id]}
               onSetDisp={onSetDisp}
               onSaveNote={onSaveNote}
@@ -402,7 +392,7 @@ export default function FindingsPanel({
           }}
         >
           <button className="new-btn" style={{ width: '100%' }} onClick={onReset}>
-            &#8634; New Review
+            New Review
           </button>
         </div>
       )}

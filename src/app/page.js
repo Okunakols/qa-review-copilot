@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import useReview from '../hooks/useReview';
 import Chrome from '../components/Chrome';
 import Sidebar from '../components/Sidebar';
@@ -17,6 +17,7 @@ import { ANALYSIS_STEPS, RISK_MAP, READINESS_MAP } from '../lib/constants';
 export default function Home() {
   const r = useReview();
   const {
+    mounted,
     apiKey,
     mainFile,
     findings,
@@ -37,7 +38,6 @@ export default function Home() {
     filterMode,
     setMainFile,
     saveApiKey,
-    loadApiKey,
     clearApiKey,
     updateCfg,
     addSource,
@@ -48,12 +48,8 @@ export default function Home() {
     saveNote,
     startReview,
     downloadDocx,
-    exportReport,
-    exportCSV,
     resetReview,
     setFilterMode,
-    setError,
-    generateReviewId,
   } = r;
 
   const [showSettings, setShowSettings] = useState(false);
@@ -66,10 +62,7 @@ export default function Home() {
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [apiKeySaved, setApiKeySaved] = useState(false);
 
-  useEffect(() => {
-    loadApiKey();
-  }, [loadApiKey]);
-
+  // Track API key state
   useEffect(() => {
     setApiKeySaved(!!apiKey);
   }, [apiKey]);
@@ -83,7 +76,7 @@ export default function Home() {
 
   const handleMainFile = useCallback(
     e => {
-      const f = e.target?.files?.[0] || e;
+      const f = e.target?.files?.[0];
       if (f) setMainFile(f);
     },
     [setMainFile]
@@ -92,11 +85,16 @@ export default function Home() {
   const handleDrop = useCallback(
     e => {
       e.preventDefault();
+      e.stopPropagation();
       const f = e.dataTransfer?.files?.[0];
       if (f) setMainFile(f);
     },
     [setMainFile]
   );
+
+  const handleDragOver = useCallback(e => {
+    e.preventDefault();
+  }, []);
 
   const handleSrcFileSelect = useCallback(e => {
     const f = e.target?.files?.[0];
@@ -112,8 +110,7 @@ export default function Home() {
     try {
       const text = await readFileText(srcModalFile);
       if (!text.trim()) throw new Error('No text found in file.');
-      const id =
-        's' + Date.now() + Math.random().toString(36).slice(2, 5);
+      const id = 's' + Date.now() + Math.random().toString(36).slice(2, 5);
       addSource({
         id,
         name: srcModalName || srcModalFile.name,
@@ -149,6 +146,11 @@ export default function Home() {
     observation: findings.filter(f => f.severity === 'OBSERVATION').length,
     ofi: findings.filter(f => f.severity === 'OFI').length,
   };
+
+  // Don't render until client-side hydration is complete
+  if (!mounted) {
+    return null;
+  }
 
   return (
     <>
@@ -247,7 +249,7 @@ export default function Home() {
                   <input
                     className="ak-inp"
                     type="password"
-                    placeholder="Enter API key\u2026"
+                    placeholder="Enter API key..."
                     value={apiKeyInput}
                     onChange={e => setApiKeyInput(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && handleApiKeySave()}
@@ -297,19 +299,15 @@ export default function Home() {
             <div className="dropcard-h">
               <div
                 className={`dch-dot ${mainFile ? 'active' : ''}`}
-                id="doc-dot"
               />
               <span className="dch-title">Primary Document</span>
               <span className="dch-sub">.docx &middot; .pdf &middot; .txt &middot; max 10MB</span>
             </div>
             <div
               className={`dz ${mainFile ? 'has' : ''}`}
-              onClick={() => document.getElementById('inp-main').click()}
-              onDragOver={e => {
-                e.preventDefault();
-                e.currentTarget.classList.add('over');
-              }}
-              onDragLeave={e => e.currentTarget.classList.remove('over')}
+              onClick={() => document.getElementById('inp-main')?.click()}
+              onDragOver={handleDragOver}
+              onDragLeave={() => {}}
               onDrop={handleDrop}
             >
               {!mainFile ? (
@@ -371,8 +369,8 @@ export default function Home() {
                 <span className="cfg-lbl">Language</span>
                 <div className="segs">
                   {[
-                    { v: 'Turkish', label: '\uD83C\uDDF9\uD83C\uDDF7 Turkish' },
-                    { v: 'English', label: '\uD83C\uDDFA\uD83C\uDDF8 English' },
+                    { v: 'Turkish', label: 'Turkish' },
+                    { v: 'English', label: 'English' },
                   ].map(o => (
                     <button
                       key={o.v}
@@ -457,22 +455,22 @@ export default function Home() {
                   marginBottom: 10,
                 }}
               >
-                Analysis in progress&hellip;
+                Analysis in progress...
               </div>
               <div className="status-steps">
                 {ANALYSIS_STEPS.map((s, i) => {
-                  const idx = ANALYSIS_STEPS.findIndex(
+                  const activeIdx = ANALYSIS_STEPS.findIndex(
                     x => x.id === activeStep
                   );
                   const sIdx = ANALYSIS_STEPS.findIndex(
                     x => x.id === s.id
                   );
                   let cls = '';
-                  let icon = i + 1;
-                  if (sIdx < idx) {
+                  let icon = String(i + 1);
+                  if (activeIdx >= 0 && sIdx < activeIdx) {
                     cls = 'done';
                     icon = '\u2713';
-                  } else if (sIdx === idx) {
+                  } else if (sIdx === activeIdx) {
                     cls = 'active';
                     icon = '\u25CF';
                   }
@@ -494,10 +492,10 @@ export default function Home() {
               disabled={!mainFile || !apiKey || isReviewing}
               onClick={startReview}
             >
-              &#9654; &nbsp; Start AI Review
+              Start AI Review
             </button>
             <div className="privacy">
-              &#128274; Documents are not stored on any server. Content is
+              Documents are not stored on any server. Content is
               processed by AI engine for analysis only. Output:{' '}
               <strong>FileName_reviewed.docx</strong> &mdash; original
               untouched, comments injected into copy.
@@ -519,17 +517,17 @@ export default function Home() {
                   </div>
                   <div className="ss-badges">
                     {riskBadge && (
-                      <span
-                        className={`risk-badge ${riskBadge[0]}`}
-                      >
+                      <span className={`risk-badge ${riskBadge[0]}`}>
                         {riskBadge[1]}
                       </span>
                     )}
                     {readinessStr && (() => {
-                      const [cls, ...lbl] = readinessStr.split(' ');
+                      const parts = readinessStr.split(' ');
+                      const cls = parts[0];
+                      const lbl = parts.slice(1).join(' ');
                       return (
                         <span className={`ready-badge ${cls}`}>
-                          {lbl.join(' ')}
+                          {lbl}
                         </span>
                       );
                     })()}
@@ -563,6 +561,10 @@ export default function Home() {
                   <div className="stat-v sv4">{stats.observation}</div>
                   <div className="stat-l">Obs.</div>
                 </div>
+                <div className="stat">
+                  <div className="stat-v sv5">{stats.ofi}</div>
+                  <div className="stat-l">OFI</div>
+                </div>
               </div>
 
               {reviewedBlob && (
@@ -579,10 +581,10 @@ export default function Home() {
                     </div>
                   </div>
                   <button className="btn-dl" onClick={downloadDocx}>
-                    &#11015; Download .docx
+                    Download .docx
                   </button>
                   <button className="btn-report" onClick={() => setShowReport(true)}>
-                    &#128202; Export Report
+                    Export Report
                   </button>
                 </div>
               )}

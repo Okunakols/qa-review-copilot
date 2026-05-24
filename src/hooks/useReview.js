@@ -1,5 +1,5 @@
 'use client';
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { callAI } from '../lib/api';
 import { injectComments } from '../lib/docx';
 import { readFileText } from '../lib/fileReader';
@@ -11,6 +11,7 @@ import {
 import { buildReportText, buildCSV, downloadBlob } from '../lib/utils';
 
 export default function useReview() {
+  const [mounted, setMounted] = useState(false);
   const [apiKey, setApiKey] = useState('');
   const [mainFile, setMainFile] = useState(null);
   const [mainDocxBuf, setMainDocxBuf] = useState(null);
@@ -18,34 +19,9 @@ export default function useReview() {
   const [reviewedBlob, setReviewedBlob] = useState(null);
   const [outName, setOutName] = useState('reviewed.docx');
   const [currentResult, setCurrentResult] = useState(null);
-  const [sources, setSources] = useState(() => {
-    if (typeof window === 'undefined') return [];
-    try {
-      return JSON.parse(localStorage.getItem(LS_KEYS.SOURCES) || '[]');
-    } catch {
-      return [];
-    }
-  });
-  const [cfg, setCfg] = useState(() => {
-    if (typeof window === 'undefined')
-      return { author: '', initials: '', org: '' };
-    try {
-      return JSON.parse(
-        localStorage.getItem(LS_KEYS.CONFIG) ||
-          '{"author":"","initials":"","org":""}'
-      );
-    } catch {
-      return { author: '', initials: '', org: '' };
-    }
-  });
-  const [history, setHistory] = useState(() => {
-    if (typeof window === 'undefined') return [];
-    try {
-      return JSON.parse(localStorage.getItem(LS_KEYS.HISTORY) || '[]');
-    } catch {
-      return [];
-    }
-  });
+  const [sources, setSources] = useState([]);
+  const [cfg, setCfg] = useState({ author: '', initials: '', org: '' });
+  const [history, setHistory] = useState([]);
   const [sel, setSel] = useState({
     lang: 'Turkish',
     tone: 'Formal',
@@ -62,11 +38,33 @@ export default function useReview() {
     project: '',
     revision: '',
     company: '',
-    date: new Date().toISOString().split('T')[0],
+    date: '',
   });
   const [filterMode, setFilterMode] = useState('all');
 
   const reviewIdRef = useRef('');
+
+  // Hydrate from localStorage after mount to avoid SSR mismatch
+  useEffect(() => {
+    try {
+      const storedSources = JSON.parse(localStorage.getItem(LS_KEYS.SOURCES) || '[]');
+      if (storedSources.length) setSources(storedSources);
+    } catch {}
+    try {
+      const storedCfg = JSON.parse(
+        localStorage.getItem(LS_KEYS.CONFIG) || '{"author":"","initials":"","org":""}'
+      );
+      setCfg(storedCfg);
+    } catch {}
+    try {
+      const storedHistory = JSON.parse(localStorage.getItem(LS_KEYS.HISTORY) || '[]');
+      if (storedHistory.length) setHistory(storedHistory);
+    } catch {}
+    const k = sessionStorage.getItem(SS_KEYS.API_KEY);
+    if (k && k.length >= 20) setApiKey(k);
+    setDocMeta(prev => ({ ...prev, date: new Date().toISOString().split('T')[0] }));
+    setMounted(true);
+  }, []);
 
   const generateReviewId = useCallback(() => {
     const id = 'RVW-' + Date.now().toString(36).toUpperCase();
@@ -75,6 +73,11 @@ export default function useReview() {
     return id;
   }, []);
 
+  // Generate initial review ID after mount
+  useEffect(() => {
+    if (mounted) generateReviewId();
+  }, [mounted, generateReviewId]);
+
   const saveApiKey = useCallback(
     key => {
       if (!key || key.length < 20) {
@@ -82,33 +85,22 @@ export default function useReview() {
         return false;
       }
       setApiKey(key);
-      if (typeof window !== 'undefined')
-        sessionStorage.setItem(SS_KEYS.API_KEY, key);
+      try { sessionStorage.setItem(SS_KEYS.API_KEY, key); } catch {}
       setError('');
       return true;
     },
     []
   );
 
-  const loadApiKey = useCallback(() => {
-    if (typeof window === 'undefined') return;
-    const k = sessionStorage.getItem(SS_KEYS.API_KEY);
-    if (k && k.length >= 20) {
-      setApiKey(k);
-    }
-  }, []);
-
   const clearApiKey = useCallback(() => {
     setApiKey('');
-    if (typeof window !== 'undefined')
-      sessionStorage.removeItem(SS_KEYS.API_KEY);
+    try { sessionStorage.removeItem(SS_KEYS.API_KEY); } catch {}
   }, []);
 
   const updateCfg = useCallback(newCfg => {
     setCfg(prev => {
       const updated = { ...prev, ...newCfg };
-      if (typeof window !== 'undefined')
-        localStorage.setItem(LS_KEYS.CONFIG, JSON.stringify(updated));
+      try { localStorage.setItem(LS_KEYS.CONFIG, JSON.stringify(updated)); } catch {}
       return updated;
     });
   }, []);
@@ -116,8 +108,7 @@ export default function useReview() {
   const addSource = useCallback(source => {
     setSources(prev => {
       const next = [...prev, source];
-      if (typeof window !== 'undefined')
-        localStorage.setItem(LS_KEYS.SOURCES, JSON.stringify(next));
+      try { localStorage.setItem(LS_KEYS.SOURCES, JSON.stringify(next)); } catch {}
       return next;
     });
   }, []);
@@ -125,8 +116,7 @@ export default function useReview() {
   const removeSource = useCallback(id => {
     setSources(prev => {
       const next = prev.filter(s => s.id !== id);
-      if (typeof window !== 'undefined')
-        localStorage.setItem(LS_KEYS.SOURCES, JSON.stringify(next));
+      try { localStorage.setItem(LS_KEYS.SOURCES, JSON.stringify(next)); } catch {}
       return next;
     });
   }, []);
@@ -134,8 +124,7 @@ export default function useReview() {
   const toggleSource = useCallback((id, active) => {
     setSources(prev => {
       const next = prev.map(s => (s.id === id ? { ...s, active } : s));
-      if (typeof window !== 'undefined')
-        localStorage.setItem(LS_KEYS.SOURCES, JSON.stringify(next));
+      try { localStorage.setItem(LS_KEYS.SOURCES, JSON.stringify(next)); } catch {}
       return next;
     });
   }, []);
@@ -202,7 +191,7 @@ export default function useReview() {
 
       setActiveStep('inject');
       let blob = null;
-      if (docxBuf && typeof JSZip !== 'undefined') {
+      if (docxBuf && typeof window !== 'undefined' && window.JSZip) {
         try {
           blob = await injectComments(
             docxBuf,
@@ -238,8 +227,7 @@ export default function useReview() {
       };
       setHistory(prev => {
         const next = [entry, ...prev].slice(0, 20);
-        if (typeof window !== 'undefined')
-          localStorage.setItem(LS_KEYS.HISTORY, JSON.stringify(next));
+        try { localStorage.setItem(LS_KEYS.HISTORY, JSON.stringify(next)); } catch {}
         return next;
       });
     } catch (err) {
@@ -292,6 +280,7 @@ export default function useReview() {
 
   return {
     // State
+    mounted,
     apiKey,
     mainFile,
     mainDocxBuf,
@@ -314,7 +303,6 @@ export default function useReview() {
     // Actions
     setMainFile,
     saveApiKey,
-    loadApiKey,
     clearApiKey,
     updateCfg,
     addSource,
@@ -328,7 +316,7 @@ export default function useReview() {
     exportReport,
     exportCSV,
     resetReview,
-    setDocMeta: setDocMeta,
+    setDocMeta,
     setFilterMode,
     setError,
     generateReviewId,

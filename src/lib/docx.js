@@ -1,6 +1,7 @@
 // DOCX comment + track change injection using JSZip
 
 export async function injectComments(arrayBuffer, findings, author, initials) {
+  const JSZip = window.JSZip;
   const zip = await JSZip.loadAsync(arrayBuffer);
   let docXml = await zip.file('word/document.xml').async('string');
   let commXml = '';

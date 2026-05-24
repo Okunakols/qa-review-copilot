@@ -15,20 +15,27 @@ export default function RootLayout({ children }) {
           href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap"
           rel="stylesheet"
         />
+      </head>
+      <body>
+        {children}
         <script
           src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.8.0/mammoth.browser.min.js"
-          async
+          defer
         />
         <script
           src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"
-          async
+          defer
         />
         <script
           src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"
-          async
+          defer
         />
-      </head>
-      <body>{children}</body>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `if(typeof pdfjsLib!=='undefined')pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';`,
+          }}
+        />
+      </body>
     </html>
   );
 }
